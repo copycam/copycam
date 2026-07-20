@@ -61,6 +61,13 @@ export default function App({ accentColor = '#CFFF3B', deviceName = 'My MacBook'
             </div>
           ))}
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8a8a82', fontFamily: 'ui-monospace,Menlo,monospace' }}>
+          <svg width="10" height="12" viewBox="0 0 10 12" style={{ flex: 'none' }} aria-hidden="true">
+            <rect x="0.75" y="5" width="8.5" height="6.25" rx="1.5" fill="none" stroke="#8a8a82" strokeWidth="1.5" />
+            <path d="M2.5 5V3.5a2.5 2.5 0 015 0V5" fill="none" stroke="#8a8a82" strokeWidth="1.5" />
+          </svg>
+          end-to-end encrypted · use Wi-Fi you trust
+        </div>
         <div style={{ fontSize: 12, color: '#8a8a82', fontFamily: 'ui-monospace,Menlo,monospace' }}>interactive demo — try it →</div>
       </div>
 
