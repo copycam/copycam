@@ -73,6 +73,19 @@ export default function MobileApp() {
     streamRef.current = null;
   }, []);
 
+  const connect = useCallback(() => {
+    setPhase('connecting');
+    call(keyRef.current, 'hello', {})
+      .then((ack) => {
+        setPcName(ack.name);
+        setPhase('idle');
+      })
+      .catch(() => {
+        setErrorMsg('Can’t reach your computer. If CopyCam is running there and you’re on the same Wi-Fi, just rescan the QR it shows — that always re-links.');
+        setPhase('error');
+      });
+  }, []);
+
   useEffect(() => {
     const key = loadKey();
     if (!key) {
@@ -80,20 +93,12 @@ export default function MobileApp() {
       return;
     }
     keyRef.current = key;
-    call(key, 'hello', {})
-      .then((ack) => {
-        setPcName(ack.name);
-        setPhase('idle');
-      })
-      .catch(() => {
-        setErrorMsg('Can’t reach your computer. Make sure CopyCam is running there and you’re on the same Wi-Fi, then rescan the QR.');
-        setPhase('error');
-      });
+    connect();
     return () => {
       clearTimeout(resetTimer.current);
       stopCamera();
     };
-  }, [stopCamera]);
+  }, [connect, stopCamera]);
 
   // Bring the viewfinder up as soon as we're linked.
   const linked = phase !== 'unpaired' && phase !== 'connecting' && phase !== 'error';
@@ -217,7 +222,10 @@ export default function MobileApp() {
         {phase === 'error' && (
           <>
             <div style={{ fontSize: 14.5, lineHeight: 1.5, color: '#55554f', maxWidth: 280 }}>{errorMsg}</div>
-            <button onClick={rePair} style={{ border: 'none', cursor: 'pointer', background: '#161616', color: '#fff', fontSize: 14, fontWeight: 600, padding: '13px 22px', borderRadius: 999, fontFamily: 'inherit' }}>
+            <button onClick={connect} style={{ border: 'none', cursor: 'pointer', background: '#161616', color: '#fff', fontSize: 14, fontWeight: 600, padding: '13px 22px', borderRadius: 999, fontFamily: 'inherit' }}>
+              Try again
+            </button>
+            <button onClick={rePair} style={{ border: 'none', cursor: 'pointer', background: 'none', color: '#8a8a82', fontSize: 13, fontWeight: 600, padding: 4, fontFamily: 'inherit' }}>
               Forget pairing
             </button>
           </>

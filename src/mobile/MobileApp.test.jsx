@@ -73,9 +73,20 @@ describe('MobileApp', () => {
     render(<MobileApp />);
 
     expect(await screen.findByText(/can’t reach your computer/i)).toBeInTheDocument();
+    expect(screen.getByText(/rescan the qr/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /forget pairing/i }));
     expect(api.forgetKey).toHaveBeenCalled();
     expect(screen.getByText(/scan the qr code it shows/i)).toBeInTheDocument();
+  });
+
+  it('Try again re-attempts the hello and recovers', async () => {
+    api.loadKey.mockReturnValue(KEY);
+    api.call.mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce({ name: 'MY-PC' });
+    render(<MobileApp />);
+
+    await screen.findByText(/can’t reach your computer/i);
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(await screen.findByText('MY-PC — linked')).toBeInTheDocument();
   });
 
   it('sends selected blocks and shows the sent toast', async () => {
