@@ -28,6 +28,7 @@ CopyCam moves text you photograph — often literally passwords — from your ph
 - Anyone on the LAN poking the API: without the key they cannot write your clipboard, submit images for OCR, or read anything.
 - Replayed or cross-purposed captured payloads.
 - Random websites you visit trying to reach the companion via DNS rebinding.
+- Third-party snooping on your text: OCR runs entirely on your own PC (PaddleOCR models on ONNX Runtime, in-process). Photographed text — passwords included — is never sent to any cloud OCR service.
 
 ## What this does NOT protect against
 
@@ -42,6 +43,10 @@ Be honest with yourself about these:
 
 - `npm run serve -- --reset` generates a new key; previously paired phones stop working until they rescan.
 - On the phone, "Forget pairing" (shown on connection errors) clears the stored key.
+
+## Dependencies
+
+`npm audit` reports a high-severity advisory in `adm-zip` (<0.6.0), pulled in transitively by `onnxruntime-node` (the OCR runtime). It is a decompression-bomb issue reachable only when `adm-zip` is fed an **attacker-controlled ZIP**; onnxruntime uses it to unpack its own trusted binaries, and CopyCam never passes user-supplied archives to it, so it is not reachable in this app. It will clear when onnxruntime-node ships an updated dependency; revisit before shipping to production.
 
 ## Reporting
 

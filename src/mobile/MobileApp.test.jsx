@@ -89,10 +89,18 @@ describe('MobileApp', () => {
     expect(await screen.findByText('MY-PC — linked')).toBeInTheDocument();
   });
 
-  it('sends selected blocks and shows the sent toast', async () => {
+  it('scans, shows the overlay review, and sends selected lines', async () => {
     api.loadKey.mockReturnValue(KEY);
     api.call.mockImplementation(async (_key, endpoint) => {
-      if (endpoint === 'ocr') return { blocks: ['SSID: X', 'Pass: Y'] };
+      if (endpoint === 'ocr') {
+        return {
+          lines: [
+            { t: 'SSID: X', x: 0, y: 0, w: 80, h: 20 },
+            { t: 'Pass: Y', x: 0, y: 30, w: 80, h: 20 },
+          ],
+          paras: [[0], [1]],
+        };
+      }
       if (endpoint === 'clip') return { ok: true };
       return { name: 'MY-PC' };
     });
@@ -119,9 +127,9 @@ describe('MobileApp', () => {
 
     fireEvent.change(input, { target: { files: [file] } });
 
-    expect(await screen.findByText('2 text blocks found')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /send 2 blocks → MY-PC/i }));
+    // overlay review renders with all lines selected by default
+    const sendBtn = await screen.findByRole('button', { name: /send 2 lines → MY-PC/i });
+    fireEvent.click(sendBtn);
     expect(await screen.findByText(/On MY-PC’s clipboard/)).toBeInTheDocument();
     expect(api.call).toHaveBeenCalledWith(KEY, 'clip', { text: 'SSID: X\nPass: Y' });
 
@@ -131,7 +139,7 @@ describe('MobileApp', () => {
   it('shows a friendly error when OCR finds nothing', async () => {
     api.loadKey.mockReturnValue(KEY);
     api.call.mockImplementation(async (_key, endpoint) => {
-      if (endpoint === 'ocr') return { blocks: [] };
+      if (endpoint === 'ocr') return { lines: [] };
       return { name: 'MY-PC' };
     });
     render(<MobileApp />);

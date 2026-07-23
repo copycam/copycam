@@ -89,8 +89,8 @@ export function createApp({ key, hostname, distDir, allowedHosts, deps }) {
     }
     try {
       const result = await ocr(Buffer.from(fromB64u(msg.img)));
-      onEvent({ type: 'scanned', blocks: result.blocks.length });
-      res.json(seal(key, result, 'ocr-ack'));
+      onEvent({ type: 'scanned', blocks: result.lines.length });
+      res.json(seal(key, { lines: result.lines, paras: result.paras }, 'ocr-ack'));
     } catch {
       res.status(500).json({ error: 'ocr failed' });
     }

@@ -4,12 +4,12 @@ import { rangeSelect, selectionText } from './selection.js';
 const ACC = '#CFFF3B';
 
 // Google-Translate-style scan review: the captured photo with each recognized
-// word highlighted. Tap a word to toggle it; drag across words to select a
+// line highlighted. Tap a line to toggle it; drag across lines to select a
 // continuous run in reading order (paragraphs!). All/Clear for batch moves.
-export default function ImageReview({ photo, words, rows, pcName, sending, onSend, onRetake }) {
+export default function ImageReview({ photo, lines, paras, pcName, sending, onSend, onRetake }) {
   const containerRef = useRef(null);
   const drag = useRef(null);
-  const [selected, setSelected] = useState(() => new Set(words.map((_, i) => i)));
+  const [selected, setSelected] = useState(() => new Set(lines.map((_, i) => i)));
   const [mode, setMode] = useState('lines');
   const [map, setMap] = useState({ scale: 0, offX: 0, offY: 0 });
 
@@ -30,25 +30,25 @@ export default function ImageReview({ photo, words, rows, pcName, sending, onSen
     return () => window.removeEventListener('resize', measure);
   }, [measure]);
 
-  const wordIndexAt = (clientX, clientY) => {
+  const lineIndexAt = (clientX, clientY) => {
     const el = document.elementFromPoint(clientX, clientY);
-    const idx = el?.closest?.('[data-widx]')?.dataset?.widx;
+    const idx = el?.closest?.('[data-lidx]')?.dataset?.lidx;
     return idx === undefined ? null : Number(idx);
   };
 
   const onPointerDown = (e) => {
-    const idx = e.target.closest?.('[data-widx]')?.dataset?.widx;
+    const idx = e.target.closest?.('[data-lidx]')?.dataset?.lidx;
     if (idx === undefined) return;
     drag.current = { anchor: Number(idx), base: new Set(selected), moved: false };
   };
 
   const onPointerMove = (e) => {
     if (!drag.current) return;
-    const idx = wordIndexAt(e.clientX, e.clientY);
+    const idx = lineIndexAt(e.clientX, e.clientY);
     if (idx !== null && idx !== drag.current.anchor) drag.current.moved = true;
     if (drag.current.moved && idx !== null) {
       const merged = new Set(drag.current.base);
-      for (const k of rangeSelect(rows, drag.current.anchor, idx)) merged.add(k);
+      for (const k of rangeSelect(paras, drag.current.anchor, idx)) merged.add(k);
       setSelected(merged);
     }
   };
@@ -68,7 +68,7 @@ export default function ImageReview({ photo, words, rows, pcName, sending, onSen
   };
 
   const n = selected.size;
-  const text = selectionText(words, rows, selected, mode);
+  const text = selectionText(lines, paras, selected, mode);
   const pillBtn = {
     border: 'none',
     cursor: 'pointer',
@@ -108,26 +108,26 @@ export default function ImageReview({ photo, words, rows, pcName, sending, onSen
             filter: 'brightness(.75)',
           }}
         />
-        {words.map((w, i) => {
-            const sel = selected.has(i);
-            return (
-              <div
-                key={i}
-                data-widx={i}
-                style={{
-                  position: 'absolute',
-                  left: map.offX + w.x * map.scale - 2,
-                  top: map.offY + w.y * map.scale - 2,
-                  width: w.w * map.scale + 4,
-                  height: w.h * map.scale + 4,
-                  borderRadius: 4,
-                  background: sel ? 'color-mix(in srgb, ' + ACC + ' 42%, transparent)' : 'rgba(255,255,255,.22)',
-                  boxShadow: sel ? `0 0 0 1.5px ${ACC}` : '0 0 0 1px rgba(255,255,255,.35)',
-                  transition: 'background .12s, box-shadow .12s',
-                }}
-              />
-            );
-          })}
+        {lines.map((l, i) => {
+          const sel = selected.has(i);
+          return (
+            <div
+              key={i}
+              data-lidx={i}
+              style={{
+                position: 'absolute',
+                left: map.offX + l.x * map.scale - 3,
+                top: map.offY + l.y * map.scale - 2,
+                width: l.w * map.scale + 6,
+                height: l.h * map.scale + 4,
+                borderRadius: 5,
+                background: sel ? 'color-mix(in srgb, ' + ACC + ' 42%, transparent)' : 'rgba(255,255,255,.18)',
+                boxShadow: sel ? `0 0 0 1.5px ${ACC}` : '0 0 0 1px rgba(255,255,255,.32)',
+                transition: 'background .12s, box-shadow .12s',
+              }}
+            />
+          );
+        })}
       </div>
 
       {/* top bar */}
@@ -136,7 +136,7 @@ export default function ImageReview({ photo, words, rows, pcName, sending, onSen
           ← Retake
         </button>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setSelected(new Set(words.map((_, i) => i)))} style={pillBtn}>
+          <button onClick={() => setSelected(new Set(lines.map((_, i) => i)))} style={pillBtn}>
             All
           </button>
           <button onClick={() => setSelected(new Set())} style={pillBtn}>
@@ -149,7 +149,7 @@ export default function ImageReview({ photo, words, rows, pcName, sending, onSen
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: '#FAFAF7', borderRadius: '22px 22px 0 0', padding: '12px 18px calc(16px + env(safe-area-inset-bottom))', boxShadow: '0 -8px 40px rgba(0,0,0,.35)', zIndex: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
           <div style={{ fontSize: 12.5, fontFamily: 'ui-monospace,Menlo,monospace', color: '#55554f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-            {n === 0 ? 'tap or drag over the words you need' : text.replaceAll('\n', ' · ')}
+            {n === 0 ? 'tap or drag over the lines you need' : text.replaceAll('\n\n', ' · ').replaceAll('\n', ' · ')}
           </div>
           <div style={{ display: 'flex', flex: 'none', background: 'rgba(0,0,0,.06)', borderRadius: 999, padding: 2 }}>
             {[
@@ -193,8 +193,15 @@ export default function ImageReview({ photo, words, rows, pcName, sending, onSen
             color: n === 0 ? 'rgba(0,0,0,.35)' : sending ? '#fff' : '#161616',
           }}
         >
-          {sending ? 'Sending…' : n === 0 ? 'Select words to send' : `Send ${n} ${n === 1 ? 'word' : 'words'} → ${pcName}`}
+          {sending ? 'Sending…' : n === 0 ? 'Select lines to send' : `Send ${n} ${n === 1 ? 'line' : 'lines'} → ${pcName}`}
         </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 9, fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11, color: '#9a9a92' }}>
+          <svg width="10" height="12" viewBox="0 0 10 12" style={{ flex: 'none' }} aria-hidden="true">
+            <rect x="0.75" y="5" width="8.5" height="6.25" rx="1.5" fill="none" stroke="#9a9a92" strokeWidth="1.5" />
+            <path d="M2.5 5V3.5a2.5 2.5 0 015 0V5" fill="none" stroke="#9a9a92" strokeWidth="1.5" />
+          </svg>
+          sent encrypted — only your computer can read it
+        </div>
       </div>
     </div>
   );

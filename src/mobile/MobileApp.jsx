@@ -31,8 +31,7 @@ function SafetyNote({ text, color = '#9a9a92' }) {
 export default function MobileApp() {
   const [phase, setPhase] = useState('connecting');
   const [pcName, setPcName] = useState('');
-  const [blocks, setBlocks] = useState([]);
-  // captured photo {url,width,height} + word geometry for the overlay review
+  // captured photo {url,width,height} + line geometry for the overlay review
   const [photo, setPhoto] = useState(null);
   const [geo, setGeo] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -120,19 +119,13 @@ export default function MobileApp() {
     try {
       const bytes = await blobToBytes(blob);
       const ack = await call(keyRef.current, 'ocr', { img: toB64u(bytes) });
-      if (!ack.blocks.length) {
+      if (!ack.lines?.length) {
         setErrorMsg('No text found in that photo — try again, closer and well-lit.');
         setPhase('error');
         return;
       }
-      if (ack.words?.length && ack.rows?.length) {
-        // overlay review on the captured photo
-        setPhoto({ url: URL.createObjectURL(blob), width, height });
-        setGeo({ words: ack.words, rows: ack.rows });
-      } else {
-        // engine without geometry -> plain list review
-        setBlocks(ack.blocks.map((text) => ({ text, sel: true })));
-      }
+      setPhoto({ url: URL.createObjectURL(blob), width, height });
+      setGeo({ lines: ack.lines, paras: ack.paras || ack.lines.map((_, i) => [i]) });
       setPhase('review');
     } catch {
       setErrorMsg('Scan failed. Check that your computer is still on the same Wi-Fi.');
@@ -165,11 +158,6 @@ export default function MobileApp() {
     }
   };
 
-  const toggle = (i) => {
-    if (phase !== 'review') return;
-    setBlocks((prev) => prev.map((b, j) => (j === i ? { ...b, sel: !b.sel } : b)));
-  };
-
   const sendText = async (text) => {
     if (!text || phase !== 'review') return;
     setPhase('sending');
@@ -184,10 +172,7 @@ export default function MobileApp() {
     }
   };
 
-  const send = () => sendText(blocks.filter((b) => b.sel).map((b) => b.text).join('\n'));
-
   const rescan = () => {
-    setBlocks([]);
     clearPhoto();
     setPhase('idle');
   };
@@ -197,7 +182,6 @@ export default function MobileApp() {
     setPhase('unpaired');
   };
 
-  const n = blocks.filter((b) => b.sel).length;
   const review = phase === 'review' || phase === 'sending';
   const sending = phase === 'sending';
 
@@ -294,51 +278,18 @@ export default function MobileApp() {
         </button>
       )}
 
-      {/* image-overlay review (word geometry available) */}
+      {/* image-overlay review with per-line selection */}
       {review && photo && geo && (
         <ImageReview
           photo={photo}
-          words={geo.words}
-          rows={geo.rows}
+          lines={geo.lines}
+          paras={geo.paras}
           pcName={pcName}
           sending={sending}
           onSend={sendText}
           onRetake={rescan}
         />
       )}
-
-      {/* fallback review sheet (no word geometry) */}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: '#FAFAF7', borderRadius: '28px 28px 0 0', padding: '14px 20px calc(24px + env(safe-area-inset-bottom))', transform: `translateY(${review && !geo ? '0%' : '112%'})`, transition: 'transform .5s cubic-bezier(.32,.72,.25,1)', boxShadow: '0 -8px 40px rgba(0,0,0,.35)', maxHeight: '70vh', overflowY: 'auto' }}>
-        <div style={{ width: 38, height: 5, borderRadius: 3, background: 'rgba(0,0,0,.14)', margin: '0 auto 14px' }} />
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#161616' }}>
-            {blocks.length} text block{blocks.length === 1 ? '' : 's'} found
-          </div>
-          <button onClick={rescan} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#8a8a82', fontFamily: 'inherit', padding: 4 }}>
-            Rescan
-          </button>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 14 }}>
-          {blocks.map((b, i) => (
-            <div key={i} onClick={() => toggle(i)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12, cursor: 'pointer', background: b.sel ? 'rgba(0,0,0,.045)' : 'transparent', opacity: b.sel ? 1 : 0.5, transition: 'all .2s', userSelect: 'none' }}>
-              <span style={{ width: 22, height: 22, borderRadius: 11, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, transition: 'all .2s', background: b.sel ? ACC : 'transparent', color: b.sel ? '#161616' : 'transparent', border: b.sel ? `1.5px solid ${ACC}` : '1.5px solid rgba(0,0,0,.22)' }}>
-                ✓
-              </span>
-              <span style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 13, color: '#26261f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.text}</span>
-            </div>
-          ))}
-        </div>
-        <button
-          onClick={send}
-          disabled={n === 0}
-          style={{ width: '100%', border: 'none', cursor: n === 0 ? 'default' : 'pointer', borderRadius: 999, padding: '15px 20px', fontSize: 15, fontWeight: 700, fontFamily: 'inherit', transition: 'all .2s', background: n === 0 ? 'rgba(0,0,0,.08)' : sending ? '#161616' : ACC, color: n === 0 ? 'rgba(0,0,0,.35)' : sending ? '#fff' : '#161616' }}
-        >
-          {sending ? 'Sending…' : n === 0 ? 'Select text to send' : `Send ${n} ${n === 1 ? 'block' : 'blocks'} → ${pcName}`}
-        </button>
-        <div style={{ marginTop: 10 }}>
-          <SafetyNote text="sent encrypted — only your computer can read it" />
-        </div>
-      </div>
 
       {phase === 'sent' && (
         <div style={{ position: 'absolute', top: 'max(90px, calc(env(safe-area-inset-top) + 60px))', left: '50%', transform: 'translateX(-50%)', animation: 'ccToast .35s cubic-bezier(.2,.9,.3,1.2) forwards', display: 'flex', alignItems: 'center', gap: 10, background: '#FAFAF7', borderRadius: 999, padding: '10px 18px 10px 12px', boxShadow: '0 10px 30px rgba(0,0,0,.4)', whiteSpace: 'nowrap' }}>

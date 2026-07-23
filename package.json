@@ -17,6 +17,8 @@
     "@noble/ciphers": "^2.2.0",
     "clipboardy": "^5.3.1",
     "express": "^5.2.1",
+    "onnxruntime-node": "^1.27.0",
+    "ppu-paddle-ocr": "^6.2.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

@@ -9,3 +9,9 @@ if (typeof HTMLCanvasElement !== 'undefined') {
     fillRect: () => {},
   });
 }
+
+// jsdom doesn't implement media playback; the viewfinder guards this already.
+if (typeof HTMLMediaElement !== 'undefined') {
+  HTMLMediaElement.prototype.play = () => Promise.resolve();
+  HTMLMediaElement.prototype.pause = () => {};
+}

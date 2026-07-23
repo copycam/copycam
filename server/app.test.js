@@ -9,9 +9,12 @@ let server;
 let allowedHost;
 const clipboard = vi.fn(async () => {});
 const ocr = vi.fn(async () => ({
-  blocks: ['SSID: HOMEBASE_5G', 'Pass: corgi-battery-42'],
-  words: [{ t: 'SSID:', x: 1, y: 2, w: 30, h: 10 }],
-  rows: [[0]],
+  lines: [
+    { t: 'SSID: HOMEBASE_5G', x: 1, y: 2, w: 120, h: 20 },
+    { t: 'Pass: corgi-battery-42', x: 1, y: 26, w: 140, h: 20 },
+  ],
+  paras: [[0, 1]],
+  text: 'SSID: HOMEBASE_5G\nPass: corgi-battery-42',
 }));
 
 function post(path, body, headers = {}) {
@@ -48,14 +51,14 @@ describe('companion server API', () => {
     expect(ack.name).toBe('TEST-PC');
   });
 
-  it('runs OCR and returns sealed blocks with word geometry', async () => {
+  it('runs OCR and returns sealed line geometry', async () => {
     const img = toB64u(new TextEncoder().encode('fake-jpeg-bytes'));
     const res = await post('/api/ocr', seal(key, { img }, 'ocr'));
     expect(res.status).toBe(200);
     const ack = open(key, await res.json(), 'ocr-ack');
-    expect(ack.blocks).toEqual(['SSID: HOMEBASE_5G', 'Pass: corgi-battery-42']);
-    expect(ack.words).toEqual([{ t: 'SSID:', x: 1, y: 2, w: 30, h: 10 }]);
-    expect(ack.rows).toEqual([[0]]);
+    expect(ack.lines).toHaveLength(2);
+    expect(ack.lines[0].t).toBe('SSID: HOMEBASE_5G');
+    expect(ack.paras).toEqual([[0, 1]]);
   });
 
   it('writes the clipboard for a valid clip message', async () => {
