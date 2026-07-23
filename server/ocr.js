@@ -90,8 +90,38 @@ export function linesToParas(lines) {
   return paras;
 }
 
+// Split each detected line into words with proportionally-estimated boxes.
+// PaddleOCR only gives line boxes, so per-word x/width are estimates based on
+// character count — good enough for touch selection and highlighting. Lines
+// with no internal spaces (e.g. CJK) stay as a single word. Each word carries
+// its line index (li) and paragraph index (pi) for reading-order selection.
+export function splitWords(lines, paras) {
+  const linePi = [];
+  paras.forEach((p, pi) => p.forEach((li) => (linePi[li] = pi)));
+  const words = [];
+  lines.forEach((line, li) => {
+    const pi = linePi[li] ?? 0;
+    const parts = line.t.split(/\s+/).filter(Boolean);
+    if (parts.length <= 1) {
+      words.push({ t: line.t, x: line.x, y: line.y, w: line.w, h: line.h, li, pi });
+      return;
+    }
+    // total layout units = word characters + single-space gaps between words
+    const units = parts.reduce((s, p) => s + p.length, 0) + (parts.length - 1);
+    const perUnit = line.w / units;
+    let cx = line.x;
+    for (const p of parts) {
+      const wpx = p.length * perUnit;
+      words.push({ t: p, x: Math.round(cx), y: line.y, w: Math.round(wpx), h: line.h, li, pi });
+      cx += wpx + perUnit; // advance past the word and one space
+    }
+  });
+  return words;
+}
+
 function pack(lines) {
-  return { lines, paras: linesToParas(lines), text: lines.map((l) => l.t).join('\n') };
+  const paras = linesToParas(lines);
+  return { words: splitWords(lines, paras), lineCount: lines.length, text: lines.map((l) => l.t).join('\n') };
 }
 
 async function recognizePaddle(imageBuffer) {
@@ -126,12 +156,13 @@ async function recognizeTesseract(imageBuffer) {
   return pack(lines.slice(0, 60));
 }
 
-// Resolves to { lines, paras, text }. `lines`/`paras` carry pixel-space
-// geometry for the image-overlay review UI.
+// Resolves to { words: [{ t, x, y, w, h, li, pi }], lineCount, text }.
+// `words` carries pixel-space geometry (line index li, paragraph index pi) for
+// the image-overlay review UI's word-level drag selection.
 export async function recognize(imageBuffer) {
   try {
     const out = await recognizePaddle(imageBuffer);
-    if (out.lines.length) return out;
+    if (out.words.length) return out;
   } catch (err) {
     console.warn('PaddleOCR failed, falling back to tesseract:', err.message);
   }

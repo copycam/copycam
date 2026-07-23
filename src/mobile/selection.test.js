@@ -1,56 +1,56 @@
 import { describe, it, expect } from 'vitest';
-import { rangeSelect, selectionText } from './selection.js';
+import { rangeIndices, selectionText } from './selection.js';
 
-// Six detected lines: two standalone, then a 3-line wrapped paragraph.
-const lines = [
-  { t: 'Café de la Gare', x: 0, y: 0, w: 200, h: 30 },
-  { t: 'Contraseña: Azul-72', x: 0, y: 90, w: 200, h: 30 },
-  { t: 'This is a longer paragraph', x: 0, y: 200, w: 200, h: 30 },
-  { t: 'that wraps across lines', x: 0, y: 236, w: 200, h: 30 },
-  { t: 'into one sentence.', x: 0, y: 272, w: 200, h: 30 },
+// words across two paragraphs:
+//   p0: "Café de" (line 0), "la Gare" (line 1)   <- wrapped
+//   p1: "Pass Azul" (line 2)
+const words = [
+  { t: 'Café', x: 0, y: 0, w: 40, h: 20, li: 0, pi: 0 },
+  { t: 'de', x: 50, y: 0, w: 20, h: 20, li: 0, pi: 0 },
+  { t: 'la', x: 0, y: 30, w: 20, h: 20, li: 1, pi: 0 },
+  { t: 'Gare', x: 30, y: 30, w: 40, h: 20, li: 1, pi: 0 },
+  { t: 'Pass', x: 0, y: 120, w: 40, h: 20, li: 2, pi: 1 },
+  { t: 'Azul', x: 50, y: 120, w: 40, h: 20, li: 2, pi: 1 },
 ];
-const paras = [[0], [1], [2, 3, 4]];
 
-describe('rangeSelect', () => {
-  it('selects a continuous run across the paragraph in reading order', () => {
-    expect(rangeSelect(paras, 2, 4)).toEqual([2, 3, 4]);
+describe('rangeIndices', () => {
+  it('expands an anchor/focus pair into an inclusive reading-order run', () => {
+    expect(rangeIndices(1, 4)).toEqual([1, 2, 3, 4]);
   });
 
-  it('works with a backwards drag', () => {
-    expect(rangeSelect(paras, 4, 1)).toEqual([1, 2, 3, 4]);
+  it('handles a backwards drag', () => {
+    expect(rangeIndices(4, 1)).toEqual([1, 2, 3, 4]);
   });
 
-  it('single line range', () => {
-    expect(rangeSelect(paras, 3, 3)).toEqual([3]);
+  it('single word', () => {
+    expect(rangeIndices(2, 2)).toEqual([2]);
   });
 
-  it('returns empty for unknown indices', () => {
-    expect(rangeSelect(paras, 99, 1)).toEqual([]);
+  it('null selection is empty', () => {
+    expect(rangeIndices(null, null)).toEqual([]);
   });
 });
 
 describe('selectionText', () => {
-  it('lines mode: one output line per selected line, in reading order', () => {
-    const sel = new Set([0, 2, 3, 4]);
-    expect(selectionText(lines, paras, sel, 'lines')).toBe(
-      'Café de la Gare\nThis is a longer paragraph\nthat wraps across lines\ninto one sentence.',
-    );
+  it('flows wrapped lines within a paragraph and separates paragraphs', () => {
+    const all = [0, 1, 2, 3, 4, 5];
+    expect(selectionText(words, all)).toBe('Café de la Gare\n\nPass Azul');
   });
 
-  it('flow mode: joins wrapped lines within a paragraph into flowing text', () => {
-    const sel = new Set([2, 3, 4]);
-    expect(selectionText(lines, paras, sel, 'flow')).toBe('This is a longer paragraph that wraps across lines into one sentence.');
+  it('selects specific words within a line', () => {
+    // just "de la Gare" — a mid-word start spanning the wrap
+    expect(selectionText(words, [1, 2, 3])).toBe('de la Gare');
   });
 
-  it('flow mode: separates distinct paragraphs with a blank line', () => {
-    const sel = new Set([0, 1, 2, 3, 4]);
-    expect(selectionText(lines, paras, sel, 'flow')).toBe(
-      'Café de la Gare\n\nContraseña: Azul-72\n\nThis is a longer paragraph that wraps across lines into one sentence.',
-    );
+  it('a single word', () => {
+    expect(selectionText(words, [5])).toBe('Azul');
   });
 
-  it('keeps reading order regardless of set insertion order', () => {
-    const sel = new Set([4, 0]);
-    expect(selectionText(lines, paras, sel, 'lines')).toBe('Café de la Gare\ninto one sentence.');
+  it('orders output by reading order regardless of index order', () => {
+    expect(selectionText(words, [5, 0])).toBe('Café\n\nAzul');
+  });
+
+  it('empty selection is empty string', () => {
+    expect(selectionText(words, [])).toBe('');
   });
 });

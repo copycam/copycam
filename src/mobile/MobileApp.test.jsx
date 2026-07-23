@@ -89,16 +89,17 @@ describe('MobileApp', () => {
     expect(await screen.findByText('MY-PC — linked')).toBeInTheDocument();
   });
 
-  it('scans, shows the overlay review, and sends selected lines', async () => {
+  it('scans, shows the overlay review, and sends the selected text', async () => {
     api.loadKey.mockReturnValue(KEY);
     api.call.mockImplementation(async (_key, endpoint) => {
       if (endpoint === 'ocr') {
         return {
-          lines: [
-            { t: 'SSID: X', x: 0, y: 0, w: 80, h: 20 },
-            { t: 'Pass: Y', x: 0, y: 30, w: 80, h: 20 },
+          words: [
+            { t: 'SSID:', x: 0, y: 0, w: 40, h: 20, li: 0, pi: 0 },
+            { t: 'X', x: 50, y: 0, w: 20, h: 20, li: 0, pi: 0 },
+            { t: 'Pass:', x: 0, y: 40, w: 40, h: 20, li: 1, pi: 1 },
+            { t: 'Y', x: 50, y: 40, w: 20, h: 20, li: 1, pi: 1 },
           ],
-          paras: [[0], [1]],
         };
       }
       if (endpoint === 'clip') return { ok: true };
@@ -127,11 +128,11 @@ describe('MobileApp', () => {
 
     fireEvent.change(input, { target: { files: [file] } });
 
-    // overlay review renders with all lines selected by default
-    const sendBtn = await screen.findByRole('button', { name: /send 2 lines → MY-PC/i });
+    // overlay review renders with everything selected by default (two paragraphs)
+    const sendBtn = await screen.findByRole('button', { name: /send to MY-PC/i });
     fireEvent.click(sendBtn);
     expect(await screen.findByText(/On MY-PC’s clipboard/)).toBeInTheDocument();
-    expect(api.call).toHaveBeenCalledWith(KEY, 'clip', { text: 'SSID: X\nPass: Y' });
+    expect(api.call).toHaveBeenCalledWith(KEY, 'clip', { text: 'SSID: X\n\nPass: Y' });
 
     globalThis.Image = origImage;
   });
@@ -139,7 +140,7 @@ describe('MobileApp', () => {
   it('shows a friendly error when OCR finds nothing', async () => {
     api.loadKey.mockReturnValue(KEY);
     api.call.mockImplementation(async (_key, endpoint) => {
-      if (endpoint === 'ocr') return { lines: [] };
+      if (endpoint === 'ocr') return { words: [] };
       return { name: 'MY-PC' };
     });
     render(<MobileApp />);

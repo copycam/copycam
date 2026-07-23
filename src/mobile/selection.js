@@ -1,35 +1,43 @@
 // Pure selection logic for the image-overlay review.
-// Each item is a detected text LINE ({ t, x, y, w, h }); `paras` groups line
-// indices into paragraphs in reading order (from the server).
+// Each item is a word ({ t, x, y, w, h, li, pi }) in reading order. Selection
+// is a single contiguous range [anchor..focus] — like native text selection.
 
-// All line indices between two lines (inclusive), in reading order — this is
-// what makes drag-selecting a continuous paragraph work across line breaks.
-export function rangeSelect(paras, a, b) {
-  const order = paras.flat();
-  const ia = order.indexOf(a);
-  const ib = order.indexOf(b);
-  if (ia === -1 || ib === -1) return [];
-  const [s, e] = ia <= ib ? [ia, ib] : [ib, ia];
-  return order.slice(s, e + 1);
+// Expand an anchor/focus pair into the inclusive list of word indices between
+// them, in reading order. Either bound may be the larger (backwards drag).
+export function rangeIndices(anchor, focus) {
+  if (anchor == null || focus == null) return [];
+  const [s, e] = anchor <= focus ? [anchor, focus] : [focus, anchor];
+  const out = [];
+  for (let i = s; i <= e; i++) out.push(i);
+  return out;
 }
 
-// Build the text to send from the selected line set.
-// 'lines' — one line of output per selected line, in reading order.
-// 'flow'  — join wrapped lines within a paragraph into flowing text (single
-//           spaces), separating distinct paragraphs with a blank line. This is
-//           what turns a photographed paragraph into one clean block.
-export function selectionText(lines, paras, selected, mode = 'lines') {
-  if (mode === 'flow') {
-    const blocks = [];
-    for (const para of paras) {
-      const sel = para.filter((i) => selected.has(i));
-      if (sel.length) blocks.push(sel.map((i) => lines[i].t).join(' '));
+// Build the outgoing text from a set of selected word indices, single flowing
+// mode: words on a line joined by spaces, wrapped lines within a paragraph
+// flowed together, and distinct paragraphs separated by a blank line.
+export function selectionText(words, indices) {
+  const sorted = [...indices].sort((a, b) => a - b);
+  const paraOrder = [];
+  const paras = new Map(); // pi -> Map(li -> [word text])
+  for (const i of sorted) {
+    const w = words[i];
+    if (!w) continue;
+    if (!paras.has(w.pi)) {
+      paras.set(w.pi, new Map());
+      paraOrder.push(w.pi);
     }
-    return blocks.join('\n\n');
+    const lines = paras.get(w.pi);
+    if (!lines.has(w.li)) lines.set(w.li, []);
+    lines.get(w.li).push(w.t);
   }
-  return paras
-    .flat()
-    .filter((i) => selected.has(i))
-    .map((i) => lines[i].t)
-    .join('\n');
+  return paraOrder
+    .sort((a, b) => a - b)
+    .map((pi) => {
+      const lines = paras.get(pi);
+      return [...lines.keys()]
+        .sort((a, b) => a - b)
+        .map((li) => lines.get(li).join(' '))
+        .join(' ');
+    })
+    .join('\n\n');
 }

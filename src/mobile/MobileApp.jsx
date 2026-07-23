@@ -31,7 +31,7 @@ function SafetyNote({ text, color = '#9a9a92' }) {
 export default function MobileApp() {
   const [phase, setPhase] = useState('connecting');
   const [pcName, setPcName] = useState('');
-  // captured photo {url,width,height} + line geometry for the overlay review
+  // captured photo {url,width,height} + word geometry for the overlay review
   const [photo, setPhoto] = useState(null);
   const [geo, setGeo] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -119,13 +119,13 @@ export default function MobileApp() {
     try {
       const bytes = await blobToBytes(blob);
       const ack = await call(keyRef.current, 'ocr', { img: toB64u(bytes) });
-      if (!ack.lines?.length) {
+      if (!ack.words?.length) {
         setErrorMsg('No text found in that photo — try again, closer and well-lit.');
         setPhase('error');
         return;
       }
       setPhoto({ url: URL.createObjectURL(blob), width, height });
-      setGeo({ lines: ack.lines, paras: ack.paras || ack.lines.map((_, i) => [i]) });
+      setGeo({ words: ack.words });
       setPhase('review');
     } catch {
       setErrorMsg('Scan failed. Check that your computer is still on the same Wi-Fi.');
@@ -278,12 +278,11 @@ export default function MobileApp() {
         </button>
       )}
 
-      {/* image-overlay review with per-line selection */}
+      {/* image-overlay review with word-level drag selection */}
       {review && photo && geo && (
         <ImageReview
           photo={photo}
-          lines={geo.lines}
-          paras={geo.paras}
+          words={geo.words}
           pcName={pcName}
           sending={sending}
           onSend={sendText}

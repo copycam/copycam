@@ -17,9 +17,9 @@ npm start        # builds, then starts the companion server
 
 1. `npm start` on the PC prints a QR code (also at http://localhost:8788/desktop).
 2. Scan it with your phone's camera (phone must be on the same Wi-Fi). CopyCam opens in the phone browser — no app store, no account. The first connect shows a one-time "not private" warning (CopyCam's own self-signed certificate — works with iOS HTTPS-Only mode): tap Show Details / Advanced → Visit Website.
-3. Tap the shutter (the live viewfinder captures a frame), then review: the photo comes up with every recognized line highlighted. Tap a line to toggle it, or drag across lines to select a whole paragraph. Send — it's on your PC's clipboard.
+3. Tap the shutter (the live viewfinder captures a frame), then review: the photo comes up with your text ready to select. **Drag across the words** — like selecting text natively — to pick exactly what you want (a tap selects one word); the selection highlights as you go. **All** / **Clear** are there for the quick cases. Send — it's on your PC's clipboard.
 
-The review has a **Lines / Paragraph** toggle: "Lines" keeps each detected line separate; "Paragraph" flows a wrapped paragraph back into one continuous block of text.
+Wrapped paragraphs are flowed back into continuous text automatically (a paragraph photographed across several lines pastes as one block, with blank lines between separate paragraphs). Swipe up the bottom sheet for a full preview of exactly what will be sent.
 
 Pair once: the key is remembered on both sides (`~/.copycam/key.json` on the PC, localStorage on the phone). Rotate it any time with `npm run serve -- --reset`.
 
