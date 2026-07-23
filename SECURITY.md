@@ -46,7 +46,9 @@ Be honest with yourself about these:
 
 ## Dependencies
 
-`npm audit` reports a high-severity advisory in `adm-zip` (<0.6.0), pulled in transitively by `onnxruntime-node` (the OCR runtime). It is a decompression-bomb issue reachable only when `adm-zip` is fed an **attacker-controlled ZIP**; onnxruntime uses it to unpack its own trusted binaries, and CopyCam never passes user-supplied archives to it, so it is not reachable in this app. It will clear when onnxruntime-node ships an updated dependency; revisit before shipping to production.
+`npm audit` is clean (0 vulnerabilities).
+
+`onnxruntime-node` (the OCR runtime) pulled in a vulnerable `adm-zip` (<0.6.0) transitively — a decompression-bomb advisory (GHSA-xcpc-8h2w-3j85). It was never reachable in CopyCam: `adm-zip` is only used to unpack onnxruntime's own trusted binaries at install time, and the app never feeds user-supplied archives to it (phone photos go straight to the OCR image pipeline, not a ZIP parser). We still pin the patched version via a `package.json` `overrides` entry (`adm-zip: ^0.6.0`), verified by forcing a fresh onnxruntime-node extraction and confirming OCR still runs. Revisit the override once onnxruntime-node updates its own dependency.
 
 ## Reporting
 
