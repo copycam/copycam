@@ -5,6 +5,9 @@ import { toB64u } from '../../shared/crypto.js';
 import ImageReview from './ImageReview.jsx';
 
 const ACC = '#CFFF3B';
+// On-screen scan window (CSS px insets from the viewport edges). Shared by the
+// corner brackets, the dim mask, and the capture crop so they always agree.
+const FRAME = { side: 26, top: 96, bottom: 176 };
 
 function Lock({ c = '#9a9a92' }) {
   return (
@@ -137,7 +140,15 @@ export default function MobileApp() {
     if (phase !== 'idle') return;
     if (cam === 'live' && videoRef.current) {
       try {
-        await submitJpeg(await frameToJpeg(videoRef.current));
+        const el = videoRef.current;
+        // capture only the on-screen framing window, not the whole frame
+        const cropCss = {
+          left: FRAME.side,
+          top: FRAME.top,
+          width: el.clientWidth - FRAME.side * 2,
+          height: el.clientHeight - FRAME.top - FRAME.bottom,
+        };
+        await submitJpeg(await frameToJpeg(el, cropCss));
         return;
       } catch {
         // frame grab failed (e.g. stream just died) — fall through to picker
@@ -238,11 +249,20 @@ export default function MobileApp() {
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(120% 90% at 50% 30%,#26282c 0%,#141518 70%)' }} />
       )}
 
-      {/* framing corners */}
-      <div style={{ position: 'absolute', left: 26, top: 90, width: 26, height: 26, borderLeft: '3px solid rgba(255,255,255,.75)', borderTop: '3px solid rgba(255,255,255,.75)', borderRadius: '4px 0 0 0' }} />
-      <div style={{ position: 'absolute', right: 26, top: 90, width: 26, height: 26, borderRight: '3px solid rgba(255,255,255,.75)', borderTop: '3px solid rgba(255,255,255,.75)', borderRadius: '0 4px 0 0' }} />
-      <div style={{ position: 'absolute', left: 26, bottom: 170, width: 26, height: 26, borderLeft: '3px solid rgba(255,255,255,.75)', borderBottom: '3px solid rgba(255,255,255,.75)', borderRadius: '0 0 0 4px' }} />
-      <div style={{ position: 'absolute', right: 26, bottom: 170, width: 26, height: 26, borderRight: '3px solid rgba(255,255,255,.75)', borderBottom: '3px solid rgba(255,255,255,.75)', borderRadius: '0 0 4px 0' }} />
+      {/* scan window — only shown with the live camera, where we crop to it.
+          In fallback (native camera) mode the whole photo is used, so we
+          don't draw a frame that would falsely imply a crop. */}
+      {cam === 'live' && (
+        <>
+          {/* dim everything outside the framed window */}
+          <div style={{ position: 'absolute', left: FRAME.side, right: FRAME.side, top: FRAME.top, bottom: FRAME.bottom, borderRadius: 8, boxShadow: '0 0 0 9999px rgba(20,21,24,.5)', pointerEvents: 'none' }} />
+          {/* corner brackets on the window edges */}
+          <div style={{ position: 'absolute', left: FRAME.side, top: FRAME.top, width: 26, height: 26, borderLeft: '3px solid rgba(255,255,255,.85)', borderTop: '3px solid rgba(255,255,255,.85)', borderRadius: '6px 0 0 0' }} />
+          <div style={{ position: 'absolute', right: FRAME.side, top: FRAME.top, width: 26, height: 26, borderRight: '3px solid rgba(255,255,255,.85)', borderTop: '3px solid rgba(255,255,255,.85)', borderRadius: '0 6px 0 0' }} />
+          <div style={{ position: 'absolute', left: FRAME.side, bottom: FRAME.bottom, width: 26, height: 26, borderLeft: '3px solid rgba(255,255,255,.85)', borderBottom: '3px solid rgba(255,255,255,.85)', borderRadius: '0 0 0 6px' }} />
+          <div style={{ position: 'absolute', right: FRAME.side, bottom: FRAME.bottom, width: 26, height: 26, borderRight: '3px solid rgba(255,255,255,.85)', borderBottom: '3px solid rgba(255,255,255,.85)', borderRadius: '0 0 6px 0' }} />
+        </>
+      )}
 
       {phase === 'scanning' && (
         <div style={{ position: 'absolute', left: '8%', right: '8%', height: 3, borderRadius: 3, background: ACC, boxShadow: `0 0 22px 4px ${ACC}`, animation: 'ccSweep 1.4s ease-in-out infinite alternate', top: '8%' }} />
