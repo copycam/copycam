@@ -85,7 +85,7 @@ describe('MobileApp', () => {
     await screen.findByText('MY-PC — linked');
 
     expect(screen.queryByRole('button', { name: /turn flash on/i })).not.toBeInTheDocument();
-    expect(await screen.findByText(/use the camera app — it has flash/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /open the camera app, which has flash/i })).toBeInTheDocument();
 
     delete navigator.mediaDevices;
   });

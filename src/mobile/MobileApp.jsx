@@ -377,6 +377,16 @@ export default function MobileApp() {
               Flash
             </button>
           )}
+          {/* iOS Safari can't switch the torch on; its camera app can */}
+          {cam === 'live' && !torchable && (
+            <button onClick={() => fileInput.current?.click()} style={ctlPill} aria-label="Open the camera app, which has flash">
+              <svg width="14" height="12" viewBox="0 0 16 14" aria-hidden="true" style={{ flex: 'none' }}>
+                <path d="M1.4 4.2h3l1.2-2h4.8l1.2 2h3v8.4h-13V4.2z" fill="none" stroke="#fff" strokeWidth="1.4" strokeLinejoin="round" />
+                <circle cx="8" cy="8.4" r="2.6" fill="none" stroke="#fff" strokeWidth="1.4" />
+              </svg>
+              Camera app
+            </button>
+          )}
           <button onClick={() => setPickerOpen(true)} style={ctlPill} aria-label="Change text language">
             <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" style={{ flex: 'none' }}>
               <circle cx="8" cy="8" r="6.6" fill="none" stroke="#fff" strokeWidth="1.4" />
@@ -427,27 +437,33 @@ export default function MobileApp() {
         </div>
       )}
 
-      {phase === 'idle' && (
-        <div style={{ position: 'absolute', bottom: 144, left: 0, right: 0, textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,.65)', textShadow: '0 1px 4px rgba(0,0,0,.6)', padding: '0 24px' }}>
+      {/* hidden outright when the frame sits too low for a hint to fit */}
+      {phase === 'idle' && FRAME.bottom >= 168 && (
+        // pinned to the strip between the frame's bottom edge and the shutter,
+        // and clipped to it, so the hint can never spill into the scan window
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 146,
+            left: 0,
+            right: 0,
+            maxHeight: FRAME.bottom - 152,
+            overflow: 'hidden',
+            textAlign: 'center',
+            fontSize: 13,
+            color: 'rgba(255,255,255,.65)',
+            textShadow: '0 1px 4px rgba(0,0,0,.6)',
+            padding: '0 24px',
+          }}
+        >
           {cam === 'live' ? 'Frame the text, then tap the shutter' : 'Tap the shutter, then photograph the text'}
           {/* short viewports (landscape) only get the primary line */}
           {vp.h >= 520 && (
             <>
-              <div style={{ marginTop: 5, fontSize: 11.5, lineHeight: 1.45, color: 'rgba(255,255,255,.44)' }}>
-                {cam === 'live'
-                  ? 'Everything inside the frame is read — keep neighbouring columns and captions out, or they’ll be mixed into your text.'
-                  : 'Fill the shot with just the text you want — anything else in the photo gets read too.'}
+              <div style={{ marginTop: 4, fontSize: 11.5, lineHeight: 1.4, color: 'rgba(255,255,255,.44)' }}>
+                {cam === 'live' ? 'Only what’s inside the frame is read' : 'Anything else in the photo is read too'}
               </div>
-              {/* iOS Safari can't switch the torch on; its camera app can */}
-              {cam === 'live' && !torchable && (
-                <button
-                  onClick={() => fileInput.current?.click()}
-                  style={{ marginTop: 9, border: 'none', background: 'rgba(20,21,24,.5)', backdropFilter: 'blur(10px)', boxShadow: 'inset 0 0 0 .5px rgba(255,255,255,.16)', color: 'rgba(255,255,255,.82)', borderRadius: 999, padding: '7px 14px', fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}
-                >
-                  Dim or glossy page? Use the camera app — it has flash
-                </button>
-              )}
-              <div style={{ marginTop: 7 }}>
+              <div style={{ marginTop: 6 }}>
                 <SafetyNote text="end-to-end encrypted" color="rgba(255,255,255,.4)" />
               </div>
             </>

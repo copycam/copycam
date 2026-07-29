@@ -40,7 +40,7 @@ export function computeFrame(vw, vh) {
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const side = Math.round(clamp(vw * 0.07, 16, 48));
   let top = Math.round(clamp(vh * 0.13, 64, 120)); // clears the "linked" pill
-  let bottom = Math.round(clamp(vh * 0.24, 168, 200)); // clears hint + shutter
+  let bottom = Math.round(clamp(vh * 0.26, 168, 230)); // clears hint + shutter
   // On short screens (landscape) shrink both insets proportionally rather than
   // letting the chrome eat the window — the scan area always survives.
   const minWindow = 96;
