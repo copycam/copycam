@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { rangeIndices, selectionText } from './selection.js';
 
 const ACC = '#CFFF3B';
-const COLLAPSED = 196; // bottom-sheet height when not expanded
+const COLLAPSED = 216; // bottom-sheet height when not expanded
 
 // Google-Translate-style scan review: the captured photo with a native
 // text-selection feel. Drag across the words to select a contiguous run
@@ -229,11 +229,11 @@ export default function ImageReview({ photo, words, pcName, sending, onSend, onR
           onPointerMove={sheetMove}
           onPointerUp={sheetUp}
           onPointerCancel={sheetUp}
-          style={{ padding: '10px 0 2px', cursor: 'grab', touchAction: 'none', flex: 'none', userSelect: 'none' }}
+          style={{ padding: '18px 0 4px', cursor: 'grab', touchAction: 'none', flex: 'none', userSelect: 'none' }}
           aria-label="Drag to preview"
         >
-          <div style={{ width: 38, height: 5, borderRadius: 3, background: 'rgba(0,0,0,.16)', margin: '0 auto' }} />
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '10px 18px 8px' }}>
+          <div style={{ width: 44, height: 5, borderRadius: 3, background: 'rgba(0,0,0,.18)', margin: '0 auto' }} />
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '14px 18px 16px' }}>
             <span style={{ fontSize: 12.5, fontWeight: 600, color: '#8a8a82' }}>
               {n === 0 ? 'Nothing selected' : `${n} word${n === 1 ? '' : 's'} selected`}
             </span>
