@@ -19,6 +19,10 @@ npm start        # builds, then starts the companion server
 2. Scan it with your phone's camera (phone must be on the same Wi-Fi). CopyCam opens in the phone browser — no app store, no account. The first connect shows a one-time "not private" warning (CopyCam's own self-signed certificate — works with iOS HTTPS-Only mode): tap Show Details / Advanced → Visit Website.
 3. Tap the shutter (the live viewfinder captures a frame), then review: the photo comes up with your text ready to select. **Drag across the words** — like selecting text natively — to pick exactly what you want (a tap selects one word); the selection highlights as you go. **All** / **Clear** are there for the quick cases. Send — it's on your PC's clipboard.
 
+**Languages.** The default model reads Latin scripts (English, Spanish, French, German…) plus Chinese, Japanese and Korean. For other scripts, tap the language pill on the camera screen and pick the script in your photo — Cyrillic, Greek, Arabic, Devanagari, Korean, Japanese, Thai, Tamil or Telugu. Every model *also* reads Latin letters, so mixed text works: with **Cyrillic** selected, `Network: OFFICE-GUEST / Пароль: Ключ-Река-88` comes through intact. Hebrew is not supported by the OCR models. Your choice is remembered on the phone.
+
+**Flash.** Where the browser allows it (Android Chrome), a Flash pill appears on the camera screen. iOS Safari does not let web pages control the torch, so on iPhone the app instead offers a shortcut to the system camera app, which has its own flash — useful for dim or glossy pages.
+
 Wrapped paragraphs are flowed back into continuous text automatically (a paragraph photographed across several lines pastes as one block, with blank lines between separate paragraphs). Swipe up the bottom sheet for a full preview of exactly what will be sent.
 
 Pair once: the key is remembered on both sides (`~/.copycam/key.json` on the PC, localStorage on the phone). Rotate it any time with `npm run serve -- --reset`.

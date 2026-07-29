@@ -15,6 +15,7 @@ const KEY = new Uint8Array(32).fill(1);
 describe('MobileApp', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear(); // the script picker persists its choice
   });
 
   it('shows pairing instructions when no key is present', () => {
@@ -50,6 +51,81 @@ describe('MobileApp', () => {
     unmount();
     expect(stop).toHaveBeenCalled(); // stream released on unmount
     delete navigator.mediaDevices;
+  });
+
+  it('shows a flash toggle only when the camera exposes torch, and applies it', async () => {
+    api.loadKey.mockReturnValue(KEY);
+    api.call.mockResolvedValueOnce({ name: 'MY-PC' });
+    const applyConstraints = vi.fn().mockResolvedValue();
+    const track = { stop: vi.fn(), getCapabilities: () => ({ torch: true }), applyConstraints };
+    navigator.mediaDevices = {
+      getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [track], getVideoTracks: () => [track] }),
+    };
+
+    render(<MobileApp />);
+    await screen.findByText('MY-PC — linked');
+
+    const flash = await screen.findByRole('button', { name: /turn flash on/i });
+    fireEvent.click(flash);
+    await screen.findByRole('button', { name: /turn flash off/i });
+    expect(applyConstraints).toHaveBeenCalledWith({ advanced: [{ torch: true }] });
+
+    delete navigator.mediaDevices;
+  });
+
+  it('offers the camera-app route instead when torch is unsupported (iOS)', async () => {
+    api.loadKey.mockReturnValue(KEY);
+    api.call.mockResolvedValueOnce({ name: 'MY-PC' });
+    const track = { stop: vi.fn(), getCapabilities: () => ({}) }; // no torch
+    navigator.mediaDevices = {
+      getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [track], getVideoTracks: () => [track] }),
+    };
+
+    render(<MobileApp />);
+    await screen.findByText('MY-PC — linked');
+
+    expect(screen.queryByRole('button', { name: /turn flash on/i })).not.toBeInTheDocument();
+    expect(await screen.findByText(/use the camera app — it has flash/i)).toBeInTheDocument();
+
+    delete navigator.mediaDevices;
+  });
+
+  it('sends the chosen script with the scan so mixed-language text works', async () => {
+    api.loadKey.mockReturnValue(KEY);
+    api.call.mockImplementation(async (_key, endpoint) => {
+      if (endpoint === 'ocr') return { words: [{ t: 'Пароль', x: 0, y: 0, w: 40, h: 20, li: 0, pi: 0 }] };
+      return { name: 'MY-PC' };
+    });
+    render(<MobileApp />);
+    await screen.findByText('MY-PC — linked');
+
+    fireEvent.click(screen.getByRole('button', { name: /change text language/i }));
+    fireEvent.click(await screen.findByText('Cyrillic'));
+
+    // the picker closes and the pill reflects the choice
+    expect(await screen.findByRole('button', { name: /change text language/i })).toHaveTextContent('Cyrillic');
+
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:x');
+    globalThis.URL.revokeObjectURL = vi.fn();
+    const origImage = globalThis.Image;
+    globalThis.Image = class {
+      set src(_v) {
+        this.naturalWidth = 100;
+        this.naturalHeight = 50;
+        setTimeout(() => this.onload());
+      }
+    };
+    HTMLCanvasElement.prototype.toBlob = function (cb) {
+      cb(new Blob(['jpeg'], { type: 'image/jpeg' }));
+    };
+    HTMLCanvasElement.prototype.getContext = () => ({ drawImage: () => {} });
+
+    fireEvent.change(document.querySelector('input[type=file]'), { target: { files: [new File(['x'], 'p.jpg')] } });
+
+    await screen.findByRole('button', { name: /send to MY-PC/i });
+    expect(api.call).toHaveBeenCalledWith(KEY, 'ocr', expect.objectContaining({ script: 'cyrillic' }));
+
+    globalThis.Image = origImage;
   });
 
   it('falls back to the photo picker when the camera is unavailable', async () => {

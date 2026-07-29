@@ -5,6 +5,42 @@ import { toB64u } from '../../shared/crypto.js';
 import ImageReview from './ImageReview.jsx';
 
 const ACC = '#CFFF3B';
+const SCRIPT_STORAGE = 'copycam:script';
+
+// Recognition scripts. Every model also reads Latin, so mixed text (English +
+// Russian, English + Greek…) works as long as the non-Latin script is picked.
+const SCRIPTS = [
+  { id: 'auto', label: 'Automatic', hint: 'Latin scripts + Chinese / Japanese / Korean' },
+  { id: 'small', label: 'Automatic — best accuracy', hint: 'same coverage, slower' },
+  { id: 'cyrillic', label: 'Cyrillic', hint: 'Русский, Українська, Български + Latin' },
+  { id: 'greek', label: 'Greek', hint: 'Ελληνικά + Latin' },
+  { id: 'arabic', label: 'Arabic', hint: 'العربية, فارسی, اردو + Latin' },
+  { id: 'devanagari', label: 'Devanagari', hint: 'हिन्दी, मराठी, नेपाली + Latin' },
+  { id: 'korean', label: 'Korean', hint: '한국어 + Latin' },
+  { id: 'japanese', label: 'Japanese', hint: '日本語 + Latin' },
+  { id: 'thai', label: 'Thai', hint: 'ไทย + Latin' },
+  { id: 'tamil', label: 'Tamil', hint: 'தமிழ் + Latin' },
+  { id: 'telugu', label: 'Telugu', hint: 'తెలుగు + Latin' },
+];
+const scriptLabel = (id) => SCRIPTS.find((s) => s.id === id)?.label ?? 'Automatic';
+
+const ctlPill = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 7,
+  border: 'none',
+  cursor: 'pointer',
+  background: 'rgba(20,21,24,.55)',
+  backdropFilter: 'blur(10px)',
+  boxShadow: 'inset 0 0 0 .5px rgba(255,255,255,.16)',
+  color: '#fff',
+  borderRadius: 999,
+  padding: '8px 14px',
+  fontSize: 12.5,
+  fontWeight: 600,
+  fontFamily: 'inherit',
+  whiteSpace: 'nowrap',
+};
 
 // Viewport size, kept current across rotation. iOS Safari can't be orientation
 // locked from the page, so instead every size that matters is derived from this
@@ -57,6 +93,17 @@ export default function MobileApp() {
   const [errorMsg, setErrorMsg] = useState('');
   // 'starting' -> 'live' (viewfinder running) | 'fallback' (photo-picker mode)
   const [cam, setCam] = useState('starting');
+  // torch (camera flash) — only some browsers expose it; iOS Safari never does
+  const [torchable, setTorchable] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [script, setScript] = useState(() => {
+    try {
+      return localStorage.getItem(SCRIPT_STORAGE) || 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+  const [pickerOpen, setPickerOpen] = useState(false);
   const vp = useViewport();
   const FRAME = computeFrame(vp.w, vp.h);
   const keyRef = useRef(null);
@@ -73,6 +120,9 @@ export default function MobileApp() {
         audio: false,
       });
       streamRef.current = stream;
+      const track = stream.getVideoTracks?.()[0];
+      setTorchable(Boolean(track?.getCapabilities?.().torch));
+      setTorchOn(false);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         try {
@@ -90,9 +140,32 @@ export default function MobileApp() {
   }, []);
 
   const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current?.getTracks().forEach((t) => t.stop()); // also kills the torch
     streamRef.current = null;
+    setTorchOn(false);
   }, []);
+
+  const toggleTorch = async () => {
+    const track = streamRef.current?.getVideoTracks?.()[0];
+    if (!track) return;
+    const next = !torchOn;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: next }] });
+      setTorchOn(next);
+    } catch {
+      setTorchable(false); // advertised but unusable — stop offering it
+    }
+  };
+
+  const chooseScript = (value) => {
+    setScript(value);
+    setPickerOpen(false);
+    try {
+      localStorage.setItem(SCRIPT_STORAGE, value);
+    } catch {
+      // private mode — the choice just won't persist
+    }
+  };
 
   const connect = useCallback(() => {
     setPhase('connecting');
@@ -140,7 +213,7 @@ export default function MobileApp() {
     clearPhoto();
     try {
       const bytes = await blobToBytes(blob);
-      const ack = await call(keyRef.current, 'ocr', { img: toB64u(bytes) });
+      const ack = await call(keyRef.current, 'ocr', { img: toB64u(bytes), script });
       if (!ack.words?.length) {
         setErrorMsg('No text found in that photo — try again, closer and well-lit.');
         setPhase('error');
@@ -293,6 +366,67 @@ export default function MobileApp() {
         {pcName} — linked
       </div>
 
+      {/* capture controls: flash (where the browser allows it) + script */}
+      {(phase === 'idle' || phase === 'scanning') && (
+        <div style={{ position: 'absolute', top: 'calc(max(24px, env(safe-area-inset-top)) + 46px)', left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap', padding: '0 16px' }}>
+          {torchable && (
+            <button onClick={toggleTorch} aria-label={torchOn ? 'Turn flash off' : 'Turn flash on'} aria-pressed={torchOn} style={{ ...ctlPill, background: torchOn ? ACC : ctlPill.background, color: torchOn ? '#161616' : '#fff' }}>
+              <svg width="11" height="15" viewBox="0 0 11 15" aria-hidden="true" style={{ flex: 'none' }}>
+                <path d="M6.5 1 1.5 8.2h3L4 14l5.5-7.4h-3L6.5 1z" fill={torchOn ? '#161616' : '#fff'} />
+              </svg>
+              Flash
+            </button>
+          )}
+          <button onClick={() => setPickerOpen(true)} style={ctlPill} aria-label="Change text language">
+            <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" style={{ flex: 'none' }}>
+              <circle cx="8" cy="8" r="6.6" fill="none" stroke="#fff" strokeWidth="1.4" />
+              <path d="M1.6 8h12.8M8 1.4c3.4 3.7 3.4 9.5 0 13.2M8 1.4c-3.4 3.7-3.4 9.5 0 13.2" fill="none" stroke="#fff" strokeWidth="1.4" />
+            </svg>
+            {scriptLabel(script)}
+          </button>
+        </div>
+      )}
+
+      {/* script picker */}
+      {pickerOpen && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(20,21,24,.55)', zIndex: 20, display: 'flex', alignItems: 'flex-end' }} onClick={() => setPickerOpen(false)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#FAFAF7', borderRadius: '22px 22px 0 0', width: '100%', maxHeight: '76%', overflowY: 'auto', padding: '14px 0 calc(14px + env(safe-area-inset-bottom))' }}
+          >
+            <div style={{ width: 44, height: 5, borderRadius: 3, background: 'rgba(0,0,0,.16)', margin: '0 auto 12px' }} />
+            <div style={{ padding: '0 20px 10px', fontSize: 15, fontWeight: 700 }}>Text language</div>
+            <div style={{ padding: '0 20px 12px', fontSize: 12.5, lineHeight: 1.5, color: '#8a8a82' }}>
+              Every option also reads Latin letters, so mixed text works — pick the non-Latin script in your photo.
+            </div>
+            {SCRIPTS.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => chooseScript(s.id)}
+                style={{
+                  display: 'flex',
+                  width: '100%',
+                  alignItems: 'center',
+                  gap: 12,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: script === s.id ? 'rgba(0,0,0,.05)' : 'transparent',
+                  padding: '12px 20px',
+                  textAlign: 'left',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <span style={{ width: 20, height: 20, borderRadius: 10, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, background: script === s.id ? ACC : 'transparent', color: script === s.id ? '#161616' : 'transparent', border: script === s.id ? `1.5px solid ${ACC}` : '1.5px solid rgba(0,0,0,.2)' }}>✓</span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ display: 'block', fontSize: 14.5, fontWeight: 600, color: '#161616' }}>{s.label}</span>
+                  <span style={{ display: 'block', fontSize: 12, color: '#8a8a82', marginTop: 2 }}>{s.hint}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {phase === 'idle' && (
         <div style={{ position: 'absolute', bottom: 144, left: 0, right: 0, textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,.65)', textShadow: '0 1px 4px rgba(0,0,0,.6)', padding: '0 24px' }}>
           {cam === 'live' ? 'Frame the text, then tap the shutter' : 'Tap the shutter, then photograph the text'}
@@ -304,6 +438,15 @@ export default function MobileApp() {
                   ? 'Everything inside the frame is read — keep neighbouring columns and captions out, or they’ll be mixed into your text.'
                   : 'Fill the shot with just the text you want — anything else in the photo gets read too.'}
               </div>
+              {/* iOS Safari can't switch the torch on; its camera app can */}
+              {cam === 'live' && !torchable && (
+                <button
+                  onClick={() => fileInput.current?.click()}
+                  style={{ marginTop: 9, border: 'none', background: 'rgba(20,21,24,.5)', backdropFilter: 'blur(10px)', boxShadow: 'inset 0 0 0 .5px rgba(255,255,255,.16)', color: 'rgba(255,255,255,.82)', borderRadius: 999, padding: '7px 14px', fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}
+                >
+                  Dim or glossy page? Use the camera app — it has flash
+                </button>
+              )}
               <div style={{ marginTop: 7 }}>
                 <SafetyNote text="end-to-end encrypted" color="rgba(255,255,255,.4)" />
               </div>

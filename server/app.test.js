@@ -53,6 +53,19 @@ describe('companion server API', () => {
     expect(ack.name).toBe('TEST-PC');
   });
 
+  it('forwards the phone’s script choice to the OCR engine', async () => {
+    const img = toB64u(new TextEncoder().encode('bytes'));
+    await post('/api/ocr', seal(key, { img, script: 'Cyrillic' }, 'ocr'));
+    // normalised to lower case; the engine validates the value itself
+    expect(ocr).toHaveBeenCalledWith(expect.anything(), 'cyrillic');
+  });
+
+  it('omits the script when the phone does not send one', async () => {
+    const img = toB64u(new TextEncoder().encode('bytes'));
+    await post('/api/ocr', seal(key, { img }, 'ocr'));
+    expect(ocr).toHaveBeenCalledWith(expect.anything(), undefined);
+  });
+
   it('runs OCR and returns sealed word geometry', async () => {
     const img = toB64u(new TextEncoder().encode('fake-jpeg-bytes'));
     const res = await post('/api/ocr', seal(key, { img }, 'ocr'));

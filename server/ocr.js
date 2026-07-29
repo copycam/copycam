@@ -17,40 +17,49 @@ import {
 } from 'ppu-paddle-ocr';
 
 // Primary OCR is PaddleOCR (PP-OCR models) running on ONNX Runtime, natively
-// in Node — no Python. The default unified model covers Latin scripts + CJK;
-// CC_OCR_MODEL selects a bigger tier or a script-specific model for others.
-// tesseract.js is the portable fallback. Both return the same line-level shape:
-//   { lines: [{ t, x, y, w, h }], paras: number[][], text }
-// where `paras` groups line indices into paragraphs (reading order) so the
-// phone can join a wrapped paragraph into flowing text.
+// in Node — no Python. tesseract.js is the portable fallback. Both return the
+// same line-level shape, packed into { words, lineCount, text }.
+//
+// Script selection matters: the default unified model reads Latin scripts and
+// CJK, and each script-specific model *also* includes Latin — so mixed text
+// (e.g. English + Russian) works as long as the non-Latin script is selected.
+// Models are loaded lazily and cached per script, so switching is cheap after
+// the first use. CC_OCR_MODEL sets the default; the phone can override it
+// per scan.
 
-const MODEL_ALIASES = {
-  tiny: undefined, // library default (V6 tiny unified)
-  small: V6_SMALL_MODEL,
+const SCRIPT_MODELS = {
+  auto: undefined, // V6 unified — Latin scripts + Chinese/Japanese/Korean
+  small: V6_SMALL_MODEL, // same coverage, more accurate, slower
   medium: V6_MEDIUM_MODEL,
-  cyrillic: V5_CYRILLIC_MOBILE_MODEL,
-  arabic: V5_ARABIC_MOBILE_MODEL,
-  devanagari: V5_DEVANAGARI_MOBILE_MODEL,
-  greek: V5_GREEK_MOBILE_MODEL,
-  korean: V5_KOREAN_MOBILE_MODEL,
   latin: V5_LATIN_MOBILE_MODEL,
+  cyrillic: V5_CYRILLIC_MOBILE_MODEL, // Russian, Ukrainian, Bulgarian, Serbian…
+  greek: V5_GREEK_MOBILE_MODEL,
+  arabic: V5_ARABIC_MOBILE_MODEL, // Arabic, Persian, Urdu
+  devanagari: V5_DEVANAGARI_MOBILE_MODEL, // Hindi, Marathi, Nepali
+  korean: V5_KOREAN_MOBILE_MODEL,
+  japanese: V3_JAPANESE_MOBILE_MODEL,
   thai: V5_THAI_MOBILE_MODEL,
   tamil: V5_TAMIL_MOBILE_MODEL,
   telugu: V5_TELUGU_MOBILE_MODEL,
-  japanese: V3_JAPANESE_MOBILE_MODEL,
 };
 
-let paddlePromise = null;
+export const SCRIPTS = Object.keys(SCRIPT_MODELS);
+export const DEFAULT_SCRIPT = (process.env.CC_OCR_MODEL || 'auto').toLowerCase();
+
+const paddleByScript = new Map();
 let tesseractPromise = null;
 
-function getPaddle() {
-  if (!paddlePromise) {
-    const alias = (process.env.CC_OCR_MODEL || 'tiny').toLowerCase();
-    const model = MODEL_ALIASES[alias];
+function getPaddle(script) {
+  const key = SCRIPT_MODELS[script] === undefined && script !== 'auto' ? 'auto' : script;
+  if (!paddleByScript.has(key)) {
+    const model = SCRIPT_MODELS[key];
     const svc = new PaddleOcrService(model ? { model } : undefined);
-    paddlePromise = svc.initialize().then(() => svc);
+    paddleByScript.set(
+      key,
+      svc.initialize().then(() => svc),
+    );
   }
-  return paddlePromise;
+  return paddleByScript.get(key);
 }
 
 function unionBox(items) {
@@ -124,10 +133,13 @@ function pack(lines) {
   return { words: splitWords(lines, paras), lineCount: lines.length, text: lines.map((l) => l.t).join('\n') };
 }
 
-async function recognizePaddle(imageBuffer) {
-  const svc = await getPaddle();
+async function recognizePaddle(imageBuffer, script) {
+  const svc = await getPaddle(script);
   const ab = imageBuffer.buffer.slice(imageBuffer.byteOffset, imageBuffer.byteOffset + imageBuffer.byteLength);
-  const result = await svc.recognize(ab);
+  // noCache: the library's result cache is keyed by image bytes alone, so
+  // re-scanning the same photo under a different script would otherwise hand
+  // back the previous script's text. Each capture is a fresh frame anyway.
+  const result = await svc.recognize(ab, { noCache: true });
   // Each result line is an array of recognized words; merge into one line item.
   const lines = result.lines
     .filter((wordsOnLine) => wordsOnLine.length)
@@ -159,9 +171,12 @@ async function recognizeTesseract(imageBuffer) {
 // Resolves to { words: [{ t, x, y, w, h, li, pi }], lineCount, text }.
 // `words` carries pixel-space geometry (line index li, paragraph index pi) for
 // the image-overlay review UI's word-level drag selection.
-export async function recognize(imageBuffer) {
+// `script` picks the recognition model (see SCRIPT_MODELS); unknown values
+// fall back to the unified model rather than failing the scan.
+export async function recognize(imageBuffer, script = DEFAULT_SCRIPT) {
+  const key = SCRIPT_MODELS[script] !== undefined || script === 'auto' ? script : 'auto';
   try {
-    const out = await recognizePaddle(imageBuffer);
+    const out = await recognizePaddle(imageBuffer, key);
     if (out.words.length) return out;
   } catch (err) {
     console.warn('PaddleOCR failed, falling back to tesseract:', err.message);
@@ -171,7 +186,7 @@ export async function recognize(imageBuffer) {
 
 export async function warmup() {
   try {
-    await getPaddle();
+    await getPaddle(DEFAULT_SCRIPT);
   } catch {
     // model download blocked — recognize() will fall back to tesseract on demand
   }

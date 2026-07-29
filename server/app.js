@@ -88,7 +88,9 @@ export function createApp({ key, hostname, distDir, allowedHosts, deps }) {
       return res.status(400).json({ error: 'bad request' });
     }
     try {
-      const result = await ocr(Buffer.from(fromB64u(msg.img)));
+      // script is a hint from the phone's language picker; ocr() validates it
+      const script = typeof msg.script === 'string' ? msg.script.toLowerCase().slice(0, 20) : undefined;
+      const result = await ocr(Buffer.from(fromB64u(msg.img)), script);
       onEvent({ type: 'scanned', blocks: result.lineCount });
       res.json(seal(key, { words: result.words }, 'ocr-ack'));
     } catch {

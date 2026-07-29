@@ -1,6 +1,16 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { linesToParas, splitWords } from './ocr.js';
+import { linesToParas, splitWords, SCRIPTS } from './ocr.js';
+
+describe('script selection', () => {
+  it('exposes the scripts the phone can pick, including the unified default', () => {
+    expect(SCRIPTS).toContain('auto');
+    // every model also reads Latin, so these enable mixed-language scans
+    for (const s of ['cyrillic', 'greek', 'arabic', 'japanese', 'korean']) {
+      expect(SCRIPTS).toContain(s);
+    }
+  });
+});
 
 const line = (y, h = 30, t = 'x') => ({ t, x: 10, y, w: 100, h });
 
