@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { rangeIndices, selectionText } from './selection.js';
 
 const ACC = '#CFFF3B';
@@ -18,11 +18,15 @@ export default function ImageReview({ photo, words, pcName, sending, onSend, onR
   const [sheetH, setSheetH] = useState(COLLAPSED);
   const [dragging, setDragging] = useState(false);
 
-  const expandedH = Math.round((typeof window !== 'undefined' ? window.innerHeight : 800) * 0.62);
+  // Track viewport height so rotating the phone re-derives the sheet size
+  // instead of stranding it at a height taller than the new screen.
+  const [vh, setVh] = useState(() => (typeof window === 'undefined' ? 800 : window.innerHeight));
+  const expandedH = Math.max(COLLAPSED, Math.round(vh * 0.62));
 
   // object-fit: contain mapping from image pixels to screen coordinates
   useLayoutEffect(() => {
     const measure = () => {
+      setVh(window.innerHeight);
       const el = containerRef.current;
       if (!el) return;
       const cw = el.clientWidth;
@@ -33,8 +37,17 @@ export default function ImageReview({ photo, words, pcName, sending, onSend, onR
     };
     measure();
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
+    };
   }, [photo.width, photo.height]);
+
+  // Rotating to a shorter screen must never leave the sheet covering the photo.
+  useEffect(() => {
+    setSheetH((h) => Math.min(h, expandedH));
+  }, [expandedH]);
 
   const indices = rangeIndices(sel?.anchor, sel?.focus);
   const n = indices.length;
@@ -210,22 +223,22 @@ export default function ImageReview({ photo, words, pcName, sending, onSend, onR
           transition: dragging ? 'none' : 'height .28s cubic-bezier(.32,.72,.25,1)',
         }}
       >
+        {/* the entire header — grabber and the status row — is the drag handle */}
         <div
           onPointerDown={sheetDown}
           onPointerMove={sheetMove}
           onPointerUp={sheetUp}
           onPointerCancel={sheetUp}
-          style={{ padding: '10px 0 6px', cursor: 'grab', touchAction: 'none', flex: 'none' }}
+          style={{ padding: '10px 0 2px', cursor: 'grab', touchAction: 'none', flex: 'none', userSelect: 'none' }}
           aria-label="Drag to preview"
         >
           <div style={{ width: 38, height: 5, borderRadius: 3, background: 'rgba(0,0,0,.16)', margin: '0 auto' }} />
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '0 18px 6px', flex: 'none' }}>
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: '#8a8a82' }}>
-            {n === 0 ? 'Nothing selected' : `${n} word${n === 1 ? '' : 's'} selected`}
-          </span>
-          <span style={{ fontSize: 12, color: '#b0afa8' }}>{sheetH > COLLAPSED + 10 ? 'swipe down to collapse' : 'swipe up for full preview'}</span>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '10px 18px 8px' }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: '#8a8a82' }}>
+              {n === 0 ? 'Nothing selected' : `${n} word${n === 1 ? '' : 's'} selected`}
+            </span>
+            <span style={{ fontSize: 12, color: '#b0afa8' }}>{sheetH > COLLAPSED + 10 ? 'swipe down to collapse' : 'swipe up for full preview'}</span>
+          </div>
         </div>
 
         <div

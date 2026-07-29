@@ -1,5 +1,50 @@
 import { describe, it, expect } from 'vitest';
-import { coverCropRect } from './image.js';
+import { coverCropRect, computeFrame } from './image.js';
+
+describe('computeFrame', () => {
+  const usable = (vw, vh) => {
+    const f = computeFrame(vw, vh);
+    return { w: vw - f.side * 2, h: vh - f.top - f.bottom, f };
+  };
+
+  it('leaves a large usable window in portrait', () => {
+    const { w, h } = usable(390, 844);
+    expect(w).toBeGreaterThan(300);
+    expect(h).toBeGreaterThan(400);
+  });
+
+  it('still leaves a usable window in landscape (the rotation case)', () => {
+    const { w, h, f } = usable(844, 390);
+    expect(w).toBeGreaterThan(600);
+    expect(h).toBeGreaterThanOrEqual(96);
+    // must clear the shutter, which sits ~142px up from the bottom edge
+    expect(f.bottom).toBeGreaterThanOrEqual(142);
+  });
+
+  it('never collapses the window, even on absurdly short viewports', () => {
+    for (const vh of [240, 280, 320, 360, 400]) {
+      const { h, f } = usable(700, vh);
+      expect(h).toBeGreaterThanOrEqual(96);
+      expect(f.top).toBeGreaterThan(0);
+      expect(f.bottom).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps insets inside sane bounds across a range of sizes', () => {
+    for (const [vw, vh] of [
+      [320, 568],
+      [390, 844],
+      [430, 932],
+      [844, 390],
+      [1024, 768],
+    ]) {
+      const f = computeFrame(vw, vh);
+      expect(f.side).toBeGreaterThanOrEqual(16);
+      expect(f.side).toBeLessThanOrEqual(48);
+      expect(f.top + f.bottom).toBeLessThan(vh);
+    }
+  });
+});
 
 describe('coverCropRect', () => {
   it('maps a full-box crop to the whole frame when box and video match (scale 1)', () => {

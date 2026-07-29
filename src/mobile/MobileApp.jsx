@@ -1,13 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadKey, forgetKey, call } from './api.js';
-import { downscalePhoto, blobToBytes, frameToJpeg } from './image.js';
+import { downscalePhoto, blobToBytes, frameToJpeg, computeFrame } from './image.js';
 import { toB64u } from '../../shared/crypto.js';
 import ImageReview from './ImageReview.jsx';
 
 const ACC = '#CFFF3B';
-// On-screen scan window (CSS px insets from the viewport edges). Shared by the
-// corner brackets, the dim mask, and the capture crop so they always agree.
-const FRAME = { side: 26, top: 96, bottom: 176 };
+
+// Viewport size, kept current across rotation. iOS Safari can't be orientation
+// locked from the page, so instead every size that matters is derived from this
+// and the layout stays proportional rather than breaking in landscape.
+function useViewport() {
+  const [vp, setVp] = useState(() => ({
+    w: typeof window === 'undefined' ? 390 : window.innerWidth,
+    h: typeof window === 'undefined' ? 844 : window.innerHeight,
+  }));
+  useEffect(() => {
+    const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  }, []);
+  return vp;
+}
 
 function Lock({ c = '#9a9a92' }) {
   return (
@@ -40,6 +57,8 @@ export default function MobileApp() {
   const [errorMsg, setErrorMsg] = useState('');
   // 'starting' -> 'live' (viewfinder running) | 'fallback' (photo-picker mode)
   const [cam, setCam] = useState('starting');
+  const vp = useViewport();
+  const FRAME = computeFrame(vp.w, vp.h);
   const keyRef = useRef(null);
   const fileInput = useRef(null);
   const videoRef = useRef(null);
@@ -275,15 +294,25 @@ export default function MobileApp() {
       </div>
 
       {phase === 'idle' && (
-        <div style={{ position: 'absolute', bottom: 178, left: 0, right: 0, textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,.65)', textShadow: '0 1px 4px rgba(0,0,0,.6)' }}>
+        <div style={{ position: 'absolute', bottom: 144, left: 0, right: 0, textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,.65)', textShadow: '0 1px 4px rgba(0,0,0,.6)', padding: '0 24px' }}>
           {cam === 'live' ? 'Frame the text, then tap the shutter' : 'Tap the shutter, then photograph the text'}
-          <div style={{ marginTop: 8 }}>
-            <SafetyNote text="end-to-end encrypted" color="rgba(255,255,255,.4)" />
-          </div>
+          {/* short viewports (landscape) only get the primary line */}
+          {vp.h >= 520 && (
+            <>
+              <div style={{ marginTop: 5, fontSize: 11.5, lineHeight: 1.45, color: 'rgba(255,255,255,.44)' }}>
+                {cam === 'live'
+                  ? 'Everything inside the frame is read — keep neighbouring columns and captions out, or they’ll be mixed into your text.'
+                  : 'Fill the shot with just the text you want — anything else in the photo gets read too.'}
+              </div>
+              <div style={{ marginTop: 7 }}>
+                <SafetyNote text="end-to-end encrypted" color="rgba(255,255,255,.4)" />
+              </div>
+            </>
+          )}
         </div>
       )}
       {phase === 'scanning' && (
-        <div style={{ position: 'absolute', bottom: 186, left: 0, right: 0, textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,.65)' }}>
+        <div style={{ position: 'absolute', bottom: 152, left: 0, right: 0, textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,.65)' }}>
           Reading text…
         </div>
       )}

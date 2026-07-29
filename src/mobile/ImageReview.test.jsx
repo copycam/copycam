@@ -90,6 +90,36 @@ describe('ImageReview', () => {
     expect(screen.getByText(/swipe down to collapse/i)).toBeInTheDocument();
   });
 
+  it('the whole header row drags the sheet, not just the grabber pill', () => {
+    setup();
+    // press on the status text (well away from the little grabber pill)
+    const status = screen.getByText(/words selected/i);
+    fireEvent.pointerDown(status, { clientY: 600 });
+    fireEvent.pointerMove(status, { clientY: 380 }); // drag upward
+    fireEvent.pointerUp(status, { clientY: 380 });
+    expect(screen.getByText(/swipe down to collapse/i)).toBeInTheDocument();
+  });
+
+  it('rotating to a shorter screen never leaves the sheet taller than the viewport', () => {
+    setup();
+    const sheet = screen.getByLabelText('Drag to preview').parentElement;
+    // expand while tall (portrait)
+    window.innerHeight = 844;
+    fireEvent(window, new Event('resize'));
+    const grabber = screen.getByLabelText('Drag to preview');
+    fireEvent.pointerDown(grabber, { clientY: 500 });
+    fireEvent.pointerUp(grabber, { clientY: 500 });
+    const tallH = parseInt(sheet.style.height, 10);
+    expect(tallH).toBeGreaterThan(300);
+
+    // rotate to landscape — the sheet must shrink with the viewport
+    window.innerHeight = 390;
+    fireEvent(window, new Event('orientationchange'));
+    const shortH = parseInt(sheet.style.height, 10);
+    expect(shortH).toBeLessThan(tallH);
+    expect(shortH).toBeLessThanOrEqual(390);
+  });
+
   it('Retake fires', () => {
     const { onRetake } = setup();
     fireEvent.click(screen.getByRole('button', { name: /retake/i }));

@@ -32,6 +32,27 @@ export async function blobToBytes(blob) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
+// The on-screen scan window, as CSS-px insets from the viewport edges.
+// Proportional (with clamps) so portrait and landscape both get a usable
+// window instead of the layout collapsing when the phone is rotated.
+// Shared by the corner brackets, the dim mask, and the capture crop.
+export function computeFrame(vw, vh) {
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const side = Math.round(clamp(vw * 0.07, 16, 48));
+  let top = Math.round(clamp(vh * 0.13, 64, 120)); // clears the "linked" pill
+  let bottom = Math.round(clamp(vh * 0.24, 168, 200)); // clears hint + shutter
+  // On short screens (landscape) shrink both insets proportionally rather than
+  // letting the chrome eat the window — the scan area always survives.
+  const minWindow = 96;
+  const avail = vh - minWindow;
+  if (top + bottom > avail) {
+    const k = avail / (top + bottom);
+    top = Math.max(24, Math.round(top * k));
+    bottom = Math.max(60, Math.round(bottom * k));
+  }
+  return { side, top, bottom };
+}
+
 // Map a crop rectangle given in the video element's CSS-pixel box to source
 // pixels of the underlying frame, accounting for object-fit: cover (which
 // scales the video to fill the box and centre-crops the overflow). Pure and
