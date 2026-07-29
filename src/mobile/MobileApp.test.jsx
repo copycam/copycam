@@ -128,6 +128,38 @@ describe('MobileApp', () => {
     globalThis.Image = origImage;
   });
 
+  it('swiping the language picker down closes it', async () => {
+    api.loadKey.mockReturnValue(KEY);
+    api.call.mockResolvedValueOnce({ name: 'MY-PC' });
+    render(<MobileApp />);
+    await screen.findByText('MY-PC — linked');
+
+    fireEvent.click(screen.getByRole('button', { name: /change text language/i }));
+    expect(await screen.findByText('Text language')).toBeInTheDocument();
+
+    const handle = screen.getByLabelText('Drag down to close');
+    fireEvent.pointerDown(handle, { clientY: 300 });
+    fireEvent.pointerMove(handle, { clientY: 450 }); // 150px down, past the threshold
+    fireEvent.pointerUp(handle, { clientY: 450 });
+
+    expect(screen.queryByText('Text language')).not.toBeInTheDocument();
+  });
+
+  it('a small drag springs the picker back instead of closing it', async () => {
+    api.loadKey.mockReturnValue(KEY);
+    api.call.mockResolvedValueOnce({ name: 'MY-PC' });
+    render(<MobileApp />);
+    await screen.findByText('MY-PC — linked');
+
+    fireEvent.click(screen.getByRole('button', { name: /change text language/i }));
+    const handle = await screen.findByLabelText('Drag down to close');
+    fireEvent.pointerDown(handle, { clientY: 300 });
+    fireEvent.pointerMove(handle, { clientY: 330 }); // only 30px
+    fireEvent.pointerUp(handle, { clientY: 330 });
+
+    expect(screen.getByText('Text language')).toBeInTheDocument();
+  });
+
   it('falls back to the photo picker when the camera is unavailable', async () => {
     api.loadKey.mockReturnValue(KEY);
     api.call.mockResolvedValueOnce({ name: 'MY-PC' });

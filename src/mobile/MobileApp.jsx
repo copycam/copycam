@@ -104,6 +104,9 @@ export default function MobileApp() {
     }
   });
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerY, setPickerY] = useState(0);
+  const [pickerDragging, setPickerDragging] = useState(false);
+  const pickerDrag = useRef(null);
   const vp = useViewport();
   const FRAME = computeFrame(vp.w, vp.h);
   const keyRef = useRef(null);
@@ -157,14 +160,37 @@ export default function MobileApp() {
     }
   };
 
+  const closePicker = () => {
+    setPickerOpen(false);
+    setPickerY(0);
+  };
+
   const chooseScript = (value) => {
     setScript(value);
-    setPickerOpen(false);
+    closePicker();
     try {
       localStorage.setItem(SCRIPT_STORAGE, value);
     } catch {
       // private mode — the choice just won't persist
     }
+  };
+
+  // swipe the picker down from its header to dismiss
+  const pickerDown = (e) => {
+    pickerDrag.current = e.clientY;
+    setPickerDragging(true);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const pickerMove = (e) => {
+    if (pickerDrag.current == null) return;
+    setPickerY(Math.max(0, e.clientY - pickerDrag.current));
+  };
+  const pickerUp = () => {
+    if (pickerDrag.current == null) return;
+    pickerDrag.current = null;
+    setPickerDragging(false);
+    if (pickerY > 90) closePicker();
+    else setPickerY(0);
   };
 
   const connect = useCallback(() => {
@@ -387,7 +413,14 @@ export default function MobileApp() {
               Camera app
             </button>
           )}
-          <button onClick={() => setPickerOpen(true)} style={ctlPill} aria-label="Change text language">
+          <button
+            onClick={() => {
+              setPickerY(0);
+              setPickerOpen(true);
+            }}
+            style={ctlPill}
+            aria-label="Change text language"
+          >
             <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" style={{ flex: 'none' }}>
               <circle cx="8" cy="8" r="6.6" fill="none" stroke="#fff" strokeWidth="1.4" />
               <path d="M1.6 8h12.8M8 1.4c3.4 3.7 3.4 9.5 0 13.2M8 1.4c-3.4 3.7-3.4 9.5 0 13.2" fill="none" stroke="#fff" strokeWidth="1.4" />
@@ -397,18 +430,38 @@ export default function MobileApp() {
         </div>
       )}
 
-      {/* script picker */}
+      {/* script picker — tap the backdrop or swipe the header down to dismiss */}
       {pickerOpen && (
-        <div style={{ position: 'absolute', inset: 0, background: 'rgba(20,21,24,.55)', zIndex: 20, display: 'flex', alignItems: 'flex-end' }} onClick={() => setPickerOpen(false)}>
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(20,21,24,.55)', zIndex: 20, display: 'flex', alignItems: 'flex-end' }} onClick={closePicker}>
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ background: '#FAFAF7', borderRadius: '22px 22px 0 0', width: '100%', maxHeight: '76%', overflowY: 'auto', padding: '14px 0 calc(14px + env(safe-area-inset-bottom))' }}
+            style={{
+              background: '#FAFAF7',
+              borderRadius: '22px 22px 0 0',
+              width: '100%',
+              maxHeight: '76%',
+              display: 'flex',
+              flexDirection: 'column',
+              paddingBottom: 'calc(14px + env(safe-area-inset-bottom))',
+              transform: `translateY(${pickerY}px)`,
+              transition: pickerDragging ? 'none' : 'transform .25s cubic-bezier(.32,.72,.25,1)',
+            }}
           >
-            <div style={{ width: 44, height: 5, borderRadius: 3, background: 'rgba(0,0,0,.16)', margin: '0 auto 12px' }} />
-            <div style={{ padding: '0 20px 10px', fontSize: 15, fontWeight: 700 }}>Text language</div>
-            <div style={{ padding: '0 20px 12px', fontSize: 12.5, lineHeight: 1.5, color: '#8a8a82' }}>
-              Every option also reads Latin letters, so mixed text works — pick the non-Latin script in your photo.
+            <div
+              onPointerDown={pickerDown}
+              onPointerMove={pickerMove}
+              onPointerUp={pickerUp}
+              onPointerCancel={pickerUp}
+              aria-label="Drag down to close"
+              style={{ flex: 'none', padding: '14px 0 0', cursor: 'grab', touchAction: 'none', userSelect: 'none' }}
+            >
+              <div style={{ width: 44, height: 5, borderRadius: 3, background: 'rgba(0,0,0,.16)', margin: '0 auto 12px' }} />
+              <div style={{ padding: '0 20px 10px', fontSize: 15, fontWeight: 700 }}>Text language</div>
+              <div style={{ padding: '0 20px 12px', fontSize: 12.5, lineHeight: 1.5, color: '#8a8a82' }}>
+                Every option also reads Latin letters, so mixed text works — pick the non-Latin script in your photo.
+              </div>
             </div>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
             {SCRIPTS.map((s) => (
               <button
                 key={s.id}
@@ -433,6 +486,7 @@ export default function MobileApp() {
                 </span>
               </button>
             ))}
+            </div>
           </div>
         </div>
       )}
