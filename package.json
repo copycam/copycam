@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "serve": "node server/index.js",
-    "start": "npm run build && node server/index.js"
+    "start": "npm run build && node server/index.js",
+    "app": "npm --prefix mobile run start",
+    "app:check": "cd mobile && npx tsc --noEmit"
   },
   "dependencies": {
     "@noble/ciphers": "^2.2.0",

@@ -22,6 +22,27 @@ CopyCam moves text you photograph — often literally passwords — from your ph
 - Host-header allow-list defeats DNS-rebinding attempts from malicious websites.
 - Per-IP rate limiting, 20 MB body cap, no `x-powered-by`, `nosniff`, no clipboard contents ever logged (only character counts).
 
+## The phone app talks cleartext, on purpose
+
+The React Native app ([mobile/](mobile)) uses the companion's **plain-HTTP**
+listener rather than the self-signed HTTPS one, because React Native cannot be
+told to trust that certificate and Expo Go offers no way to bypass TLS
+validation. The trade-off is different from the browser's, and better:
+
+- Payloads are still sealed with AES-256-GCM — TLS was never what protected
+  them.
+- The browser build's real TLS benefit was protecting the **served page** from
+  tampering. The app has no served page: its JavaScript ships inside the app
+  bundle, so that attack surface does not exist.
+- The cleartext listener is bound to all interfaces so the phone can reach it,
+  but `/desktop` and `/desktop/events` — which render the pairing QR, i.e. the
+  key — remain loopback-only. Tests hit both from a real LAN address and assert
+  403, and assert that an unsealed `/api` request is rejected.
+
+What an eavesdropper on your Wi-Fi can see that they could not before: the
+*size* and *timing* of scans, and the fact that the app is talking to this PC.
+Not the photo, not the text.
+
 ## What this protects against
 
 - Passive eavesdroppers on your Wi-Fi (including other devices on a WPA2-PSK network that can decrypt each other's radio traffic).

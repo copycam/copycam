@@ -4,6 +4,8 @@ Point your phone at any text. It lands on your computer's clipboard, over Wi-Fi.
 
 This repo contains the whole product:
 
+- **Phone app** ([mobile/](mobile)) — React Native + TypeScript (Expo). Runs free in Expo Go, scans the pairing QR in-app, and unlike the browser build can drive the iPhone's flash. See [mobile/README.md](mobile/README.md).
+
 - **Desktop companion** ([server/](server)) — a small Node server you run on your PC. Serves the phone app over your LAN, runs OCR ([PaddleOCR models on ONNX Runtime](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr), no Python), and writes received text to the clipboard.
 - **Phone app** ([mobile.html](mobile.html) + [src/mobile/](src/mobile)) — a web app, no install. Opened by scanning the pairing QR with your phone's camera.
 - **Landing page + interactive demo** ([index.html](index.html) + [src/App.jsx](src/App.jsx)) — the marketing page, ported from the original Claude Design prototype.

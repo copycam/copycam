@@ -1,7 +1,15 @@
 // @vitest-environment node
+import os from 'node:os';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createApp, isLoopback } from './app.js';
 import { seal, open, newKey, toB64u, MAX_AGE_MS } from '../shared/crypto.js';
+
+function lanIP() {
+  for (const ifaces of Object.values(os.networkInterfaces())) {
+    for (const i of ifaces || []) if (i.family === 'IPv4' && !i.internal) return i.address;
+  }
+  return null;
+}
 
 const key = newKey();
 let base;
@@ -147,5 +155,58 @@ describe('companion server API', () => {
     const res = await fetch(`${base}/desktop`);
     expect(res.status).toBe(200);
     expect(await res.text()).toContain('desktop page not configured');
+  });
+});
+
+// The cleartext listener is bound to every interface so the native app can
+// reach it, which means these guards are load-bearing, not theoretical.
+describe('cleartext listener exposed on the LAN', () => {
+  const ip = lanIP();
+  let lanServer;
+  let lanBase;
+
+  beforeAll(async () => {
+    if (!ip) return;
+    const app = createApp({
+      key,
+      hostname: 'TEST-PC',
+      distDir: null,
+      allowedHosts: { has: () => true }, // isolate the loopback check
+      deps: { clipboard, ocr },
+    });
+    lanServer = app.listen(0, '0.0.0.0');
+    await new Promise((r) => lanServer.on('listening', r));
+    lanBase = `http://${ip}:${lanServer.address().port}`;
+  });
+
+  afterAll(() => lanServer?.close());
+
+  it.skipIf(!ip)('refuses the desktop page (which renders the pairing key) from a LAN address', async () => {
+    const res = await fetch(`${lanBase}/desktop`);
+    expect(res.status).toBe(403);
+  });
+
+  it.skipIf(!ip)('refuses the desktop event stream from a LAN address', async () => {
+    const res = await fetch(`${lanBase}/desktop/events`);
+    expect(res.status).toBe(403);
+  });
+
+  it.skipIf(!ip)('still serves the sealed API to the LAN (that is the point)', async () => {
+    const res = await fetch(`${lanBase}/api/hello`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(seal(key, {}, 'hello')),
+    });
+    expect(res.status).toBe(200);
+    expect(open(key, await res.json(), 'hello-ack').name).toBe('TEST-PC');
+  });
+
+  it.skipIf(!ip)('rejects an unsealed API request from the LAN', async () => {
+    const res = await fetch(`${lanBase}/api/clip`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'plaintext, no key' }),
+    });
+    expect(res.status).toBe(400);
   });
 });

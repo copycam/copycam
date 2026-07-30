@@ -113,12 +113,18 @@ async function main() {
   // resolve to this PC on your LAN) so the QR URL matches the cert.
   const domain = process.env.CC_DOMAIN;
   const pairHost = domain || ip;
-  const pairUrl = `https://${pairHost}:${PORT}/#k=${toB64u(key)}`;
+  // `h` tells the native app which port speaks plain HTTP. React Native can't
+  // be told to accept our self-signed certificate (and Expo Go offers no way
+  // to bypass TLS validation), so the app talks to the cleartext listener
+  // instead. That costs nothing in confidentiality: every payload is already
+  // sealed with AES-256-GCM, and unlike the browser build there is no served
+  // page for a network attacker to tamper with. The browser build ignores `h`.
+  const pairUrl = `https://${pairHost}:${PORT}/?h=${DESKTOP_PORT}#k=${toB64u(key)}`;
   const allowedHosts = new Set([
     `localhost:${DESKTOP_PORT}`,
     `127.0.0.1:${DESKTOP_PORT}`,
     ...(domain ? [`${domain.toLowerCase()}:${PORT}`] : []),
-    ...ips.map((i) => `${i}:${PORT}`),
+    ...ips.flatMap((i) => [`${i}:${PORT}`, `${i}:${DESKTOP_PORT}`]),
   ]);
 
   const app = createApp({
@@ -145,13 +151,18 @@ async function main() {
   const phoneServer = https.createServer({ key: tls.key, cert: tls.cert }, app);
   const desktopServer = http.createServer(app);
 
+  // Bound to every interface so the native app can reach /api over cleartext.
+  // The desktop page is not exposed by that: /desktop* is loopback-gated in
+  // createApp (it renders the QR, which carries the pairing key), and /api is
+  // useless without the key regardless of which listener it arrives on.
   phoneServer.listen(PORT, () => {
-    desktopServer.listen(DESKTOP_PORT, '127.0.0.1', () => {
+    desktopServer.listen(DESKTOP_PORT, '0.0.0.0', () => {
       console.log(`CopyCam companion on ${hostname}\n`);
       QRCode.toString(pairUrl, { type: 'terminal', small: true }, (err, qr) => {
         if (!err) console.log(qr);
         console.log(`Scan the QR with your phone (same Wi-Fi), or open it at:`);
         console.log(`  http://localhost:${DESKTOP_PORT}/desktop\n`);
+        console.log(`Browser app: https://${pairHost}:${PORT}   CopyCam app: http://${ip}:${DESKTOP_PORT}`);
         if (ips.length > 1) console.log(`(multiple networks detected, using ${ip} — others: ${ips.slice(1).join(', ')})`);
         console.log(isNew ? 'New pairing key generated.' : 'Using existing pairing key (run with --reset to rotate).');
         console.log(`TLS certificate: ${tls.source}`);
