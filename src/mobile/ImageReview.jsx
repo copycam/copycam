@@ -190,24 +190,36 @@ export default function ImageReview({ photo, words, pcName, sending, onSend, onR
         {map.scale > 0 &&
           bars.map((b, i) => {
             // Sit *inside* the OCR line box rather than padding past it: line
-            // boxes include leading, so a full-height bar plus its ring used to
-            // overhang by ~3.5px a side and collide with the next line on
-            // tightly-set text. Centred on the line so it still covers the
-            // glyphs.
+            // boxes include leading, so a bar that overhangs collides with the
+            // next line on tightly-set text.
+            //
+            // Every dimension scales with the line's *rendered* height, not the
+            // source pixels — the same page renders ~3.5x smaller in landscape
+            // (the sheet leaves a short review area), where a fixed 1px ring
+            // and 3px side padding swelled to nearly the whole line. Clamps
+            // keep it sane at both extremes.
             const lineH = b.h * map.scale;
-            const barH = Math.max(6, lineH * 0.78);
+            const px = (frac, lo, hi) => Math.max(lo, Math.min(hi, lineH * frac));
+            const padX = px(0.16, 0.5, 3);
+            const ring = px(0.07, 0.4, 1.25);
+            // Guarantee a visible gap between stacked bars. Taking 78% of the
+            // line is fine when it renders large, but on a small render (a
+            // landscape review area is ~3.5x shorter) that left barely 1px
+            // between neighbours and the highlights read as one solid slab.
+            const minGap = px(0.2, 2.5, 7);
+            const barH = Math.max(3, Math.min(lineH * 0.78, lineH - minGap - ring * 2));
             return (
               <div
                 key={i}
                 style={{
                   position: 'absolute',
-                  left: map.offX + b.x0 * map.scale - 3,
+                  left: map.offX + b.x0 * map.scale - padX,
                   top: map.offY + (b.y + b.h / 2) * map.scale - barH / 2,
-                  width: (b.x1 - b.x0) * map.scale + 6,
+                  width: (b.x1 - b.x0) * map.scale + padX * 2,
                   height: barH,
-                  borderRadius: 4,
+                  borderRadius: px(0.22, 2, 5),
                   background: 'color-mix(in srgb, ' + ACC + ' 40%, transparent)',
-                  boxShadow: `0 0 0 1px ${ACC}`,
+                  boxShadow: `0 0 0 ${ring}px ${ACC}`,
                   pointerEvents: 'none',
                 }}
               />

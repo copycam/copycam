@@ -155,6 +155,33 @@ describe('ImageReview', () => {
     expect(onSend).toHaveBeenCalledWith('two');
   });
 
+  it('keeps highlight bars separated even when the photo renders small', () => {
+    // three stacked lines, 20px pitch in source pixels
+    const stacked = [
+      { t: 'a', x: 0, y: 0, w: 100, h: 20, li: 0, pi: 0 },
+      { t: 'b', x: 0, y: 20, w: 100, h: 20, li: 1, pi: 0 },
+      { t: 'c', x: 0, y: 40, w: 100, h: 20, li: 2, pi: 0 },
+    ];
+    // a wide, short review area (the landscape case) renders the photo small
+    setup({ words: stacked, photo: { url: 'blob:x', width: 400, height: 60 } });
+    const canvas = screen.getByAltText('scanned').parentElement;
+    Object.defineProperty(canvas, 'clientWidth', { value: 800, configurable: true });
+    Object.defineProperty(canvas, 'clientHeight', { value: 120, configurable: true });
+    canvas.getBoundingClientRect = () => ({ left: 0, top: 0, right: 800, bottom: 120, width: 800, height: 120 });
+    fireEvent(window, new Event('resize'));
+
+    const bars = [...canvas.querySelectorAll('div')].filter((d) => d.style.height && d.style.borderRadius);
+    expect(bars.length).toBe(3);
+
+    const rects = bars
+      .map((b) => ({ top: parseFloat(b.style.top), h: parseFloat(b.style.height) }))
+      .sort((a, b) => a.top - b.top);
+    for (let i = 1; i < rects.length; i++) {
+      const gap = rects[i].top - (rects[i - 1].top + rects[i - 1].h);
+      expect(gap).toBeGreaterThan(0); // never overlap or touch
+    }
+  });
+
   it('the text preview lets the browser resolve bidi direction from content', () => {
     setup();
     const preview = screen.getByText(/one two three/).closest('[dir]');
