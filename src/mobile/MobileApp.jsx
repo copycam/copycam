@@ -114,6 +114,11 @@ export default function MobileApp() {
   const pickerDrag = useRef(null);
   const vp = useViewport();
   const FRAME = computeFrame(vp.w, vp.h);
+  // The capture hint lives in the strip below the frame. Portrait has the
+  // shutter down there too, so it sits above it; landscape's strip is only a
+  // margin, so the hint centres in it. Either way it is clipped to the strip.
+  const hintBottom = FRAME.landscape ? Math.max(10, Math.round(FRAME.bottom / 2) - 8) : 146;
+  const hintMaxH = FRAME.bottom - hintBottom - 6;
   const keyRef = useRef(null);
   const fileInput = useRef(null);
   const videoRef = useRef(null);
@@ -266,9 +271,9 @@ export default function MobileApp() {
         const el = videoRef.current;
         // capture only the on-screen framing window, not the whole frame
         const cropCss = {
-          left: FRAME.side,
+          left: FRAME.left,
           top: FRAME.top,
-          width: el.clientWidth - FRAME.side * 2,
+          width: el.clientWidth - FRAME.left - FRAME.right,
           height: el.clientHeight - FRAME.top - FRAME.bottom,
         };
         await submitJpeg(await frameToJpeg(el, cropCss));
@@ -378,12 +383,12 @@ export default function MobileApp() {
       {cam === 'live' && (
         <>
           {/* dim everything outside the framed window */}
-          <div style={{ position: 'absolute', left: FRAME.side, right: FRAME.side, top: FRAME.top, bottom: FRAME.bottom, borderRadius: 8, boxShadow: '0 0 0 9999px rgba(20,21,24,.5)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', left: FRAME.left, right: FRAME.right, top: FRAME.top, bottom: FRAME.bottom, borderRadius: 8, boxShadow: '0 0 0 9999px rgba(20,21,24,.5)', pointerEvents: 'none' }} />
           {/* corner brackets on the window edges */}
-          <div style={{ position: 'absolute', left: FRAME.side, top: FRAME.top, width: 26, height: 26, borderLeft: '3px solid rgba(255,255,255,.85)', borderTop: '3px solid rgba(255,255,255,.85)', borderRadius: '6px 0 0 0' }} />
-          <div style={{ position: 'absolute', right: FRAME.side, top: FRAME.top, width: 26, height: 26, borderRight: '3px solid rgba(255,255,255,.85)', borderTop: '3px solid rgba(255,255,255,.85)', borderRadius: '0 6px 0 0' }} />
-          <div style={{ position: 'absolute', left: FRAME.side, bottom: FRAME.bottom, width: 26, height: 26, borderLeft: '3px solid rgba(255,255,255,.85)', borderBottom: '3px solid rgba(255,255,255,.85)', borderRadius: '0 0 0 6px' }} />
-          <div style={{ position: 'absolute', right: FRAME.side, bottom: FRAME.bottom, width: 26, height: 26, borderRight: '3px solid rgba(255,255,255,.85)', borderBottom: '3px solid rgba(255,255,255,.85)', borderRadius: '0 0 6px 0' }} />
+          <div style={{ position: 'absolute', left: FRAME.left, top: FRAME.top, width: 26, height: 26, borderLeft: '3px solid rgba(255,255,255,.85)', borderTop: '3px solid rgba(255,255,255,.85)', borderRadius: '6px 0 0 0' }} />
+          <div style={{ position: 'absolute', right: FRAME.right, top: FRAME.top, width: 26, height: 26, borderRight: '3px solid rgba(255,255,255,.85)', borderTop: '3px solid rgba(255,255,255,.85)', borderRadius: '0 6px 0 0' }} />
+          <div style={{ position: 'absolute', left: FRAME.left, bottom: FRAME.bottom, width: 26, height: 26, borderLeft: '3px solid rgba(255,255,255,.85)', borderBottom: '3px solid rgba(255,255,255,.85)', borderRadius: '0 0 0 6px' }} />
+          <div style={{ position: 'absolute', right: FRAME.right, bottom: FRAME.bottom, width: 26, height: 26, borderRight: '3px solid rgba(255,255,255,.85)', borderBottom: '3px solid rgba(255,255,255,.85)', borderRadius: '0 0 6px 0' }} />
         </>
       )}
 
@@ -496,27 +501,28 @@ export default function MobileApp() {
         </div>
       )}
 
-      {/* hidden outright when the frame sits too low for a hint to fit */}
-      {phase === 'idle' && FRAME.bottom >= 168 && (
-        // pinned to the strip between the frame's bottom edge and the shutter,
-        // and clipped to it, so the hint can never spill into the scan window
+      {/* hidden outright when the strip below the frame is too short for text */}
+      {phase === 'idle' && hintMaxH >= 16 && (
+        // pinned to the strip below the frame's bottom edge, and clipped to
+        // it, so the hint can never spill into the scan window
         <div
           style={{
             position: 'absolute',
-            bottom: 146,
+            bottom: hintBottom,
             left: 0,
             right: 0,
-            maxHeight: FRAME.bottom - 152,
+            maxHeight: hintMaxH,
             overflow: 'hidden',
             textAlign: 'center',
             fontSize: 13,
             color: 'rgba(255,255,255,.65)',
             textShadow: '0 1px 4px rgba(0,0,0,.6)',
-            padding: '0 24px',
+            // landscape keeps clear of the shutter now parked on the right
+            padding: FRAME.landscape ? '0 116px 0 24px' : '0 24px',
           }}
         >
           {cam === 'live' ? 'Frame the text, then tap the shutter' : 'Tap the shutter, then photograph the text'}
-          {/* short viewports (landscape) only get the primary line */}
+          {/* the extra lines only appear where there is room for them */}
           {vp.h >= 520 && (
             <>
               <div style={{ marginTop: 4, fontSize: 11.5, lineHeight: 1.4, color: 'rgba(255,255,255,.44)' }}>
@@ -530,7 +536,19 @@ export default function MobileApp() {
         </div>
       )}
       {phase === 'scanning' && (
-        <div style={{ position: 'absolute', bottom: 152, left: 0, right: 0, textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,.65)' }}>
+        <div
+          style={{
+            position: 'absolute',
+            bottom: hintBottom,
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            fontSize: 13,
+            color: 'rgba(255,255,255,.65)',
+            textShadow: '0 1px 4px rgba(0,0,0,.6)',
+            padding: FRAME.landscape ? '0 116px 0 24px' : '0 24px',
+          }}
+        >
           Reading text…
         </div>
       )}
@@ -539,7 +557,22 @@ export default function MobileApp() {
         <button
           onClick={shutter}
           aria-label="Take photo of text"
-          style={{ position: 'absolute', bottom: 'max(64px, env(safe-area-inset-bottom))', left: '50%', transform: 'translateX(-50%)', width: 78, height: 78, borderRadius: '50%', border: '4px solid rgba(255,255,255,.85)', background: 'transparent', cursor: 'pointer', padding: 5, display: 'flex' }}
+          style={{
+            position: 'absolute',
+            // landscape puts the shutter under the thumb on the right edge;
+            // portrait keeps it bottom-centre
+            ...(FRAME.landscape
+              ? { right: 'max(22px, env(safe-area-inset-right))', top: '50%', transform: 'translateY(-50%)' }
+              : { bottom: 'max(64px, env(safe-area-inset-bottom))', left: '50%', transform: 'translateX(-50%)' }),
+            width: 78,
+            height: 78,
+            borderRadius: '50%',
+            border: '4px solid rgba(255,255,255,.85)',
+            background: 'transparent',
+            cursor: 'pointer',
+            padding: 5,
+            display: 'flex',
+          }}
         >
           <span style={{ flex: 1, borderRadius: '50%', background: ACC, display: 'block', boxShadow: '0 0 24px rgba(207,255,59,.35)', opacity: phase === 'scanning' ? 0.4 : 1 }} />
         </button>

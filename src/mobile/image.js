@@ -32,25 +32,55 @@ export async function blobToBytes(blob) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-// The on-screen scan window, as CSS-px insets from the viewport edges.
+// The on-screen scan window, as CSS-px insets from the viewport edges
+// ({ left, right, top, bottom }), plus the orientation it was derived for.
 // Proportional (with clamps) so portrait and landscape both get a usable
 // window instead of the layout collapsing when the phone is rotated.
 // Shared by the corner brackets, the dim mask, and the capture crop.
+//
+// The two orientations reserve space on different axes, because that's where
+// the shutter lives: bottom-centre in portrait, right-centre in landscape.
+// Landscape therefore spends width on the right rather than height at the
+// bottom, which keeps the scan window tall on the short axis — text lines run
+// horizontally, so height is the scarce dimension there.
 export function computeFrame(vw, vh) {
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  const side = Math.round(clamp(vw * 0.07, 16, 48));
-  let top = Math.round(clamp(vh * 0.13, 64, 120)); // clears the "linked" pill
-  let bottom = Math.round(clamp(vh * 0.26, 168, 230)); // clears hint + shutter
-  // On short screens (landscape) shrink both insets proportionally rather than
-  // letting the chrome eat the window — the scan area always survives.
   const minWindow = 96;
-  const avail = vh - minWindow;
-  if (top + bottom > avail) {
-    const k = avail / (top + bottom);
-    top = Math.max(24, Math.round(top * k));
-    bottom = Math.max(60, Math.round(bottom * k));
+
+  // Shrink the two insets on an axis proportionally rather than letting the
+  // chrome eat the window, so the scan area always survives a small screen.
+  const fit = (a, b, extent, minA, minB) => {
+    const avail = extent - minWindow;
+    if (a + b <= avail) return [a, b];
+    const k = avail / (a + b);
+    return [Math.max(minA, Math.round(a * k)), Math.max(minB, Math.round(b * k))];
+  };
+
+  if (vw > vh) {
+    // landscape: shutter sits centred on the right edge
+    const right = Math.round(clamp(vw * 0.15, 104, 168)); // clears the shutter
+    const left = Math.round(clamp(vw * 0.05, 16, 48));
+    const [top, bottom] = fit(
+      // the status pill and the flash/language row stack to ~104px down, and
+      // they are centred, so the window has to start below them
+      Math.round(clamp(vh * 0.28, 110, 150)),
+      Math.round(clamp(vh * 0.12, 44, 88)), // just a margin — nothing sits here
+      vh,
+      20,
+      20,
+    );
+    return { left, right, top, bottom, landscape: true };
   }
-  return { side, top, bottom };
+
+  const side = Math.round(clamp(vw * 0.07, 16, 48));
+  const [top, bottom] = fit(
+    Math.round(clamp(vh * 0.13, 64, 120)), // clears the "linked" pill
+    Math.round(clamp(vh * 0.26, 168, 230)), // clears hint + shutter
+    vh,
+    24,
+    60,
+  );
+  return { left: side, right: side, top, bottom, landscape: false };
 }
 
 // Map a crop rectangle given in the video element's CSS-pixel box to source

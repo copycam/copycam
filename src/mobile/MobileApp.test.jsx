@@ -128,6 +128,42 @@ describe('MobileApp', () => {
     globalThis.Image = origImage;
   });
 
+  it('parks the shutter on the right edge in landscape', async () => {
+    const [w, h] = [window.innerWidth, window.innerHeight];
+    window.innerWidth = 844;
+    window.innerHeight = 390;
+    api.loadKey.mockReturnValue(KEY);
+    api.call.mockResolvedValueOnce({ name: 'MY-PC' });
+    render(<MobileApp />);
+    await screen.findByText('MY-PC — linked');
+
+    const shutter = screen.getByRole('button', { name: /take photo of text/i });
+    expect(shutter.style.top).toBe('50%'); // vertically centred on the side
+    expect(shutter.style.transform).toBe('translateY(-50%)');
+    expect(shutter.style.left).toBe('');
+
+    window.innerWidth = w;
+    window.innerHeight = h;
+  });
+
+  it('keeps the shutter bottom-centre in portrait', async () => {
+    const [w, h] = [window.innerWidth, window.innerHeight];
+    window.innerWidth = 390;
+    window.innerHeight = 844;
+    api.loadKey.mockReturnValue(KEY);
+    api.call.mockResolvedValueOnce({ name: 'MY-PC' });
+    render(<MobileApp />);
+    await screen.findByText('MY-PC — linked');
+
+    const shutter = screen.getByRole('button', { name: /take photo of text/i });
+    expect(shutter.style.left).toBe('50%');
+    expect(shutter.style.transform).toBe('translateX(-50%)');
+    expect(shutter.style.top).toBe('');
+
+    window.innerWidth = w;
+    window.innerHeight = h;
+  });
+
   it('swiping the language picker down closes it', async () => {
     api.loadKey.mockReturnValue(KEY);
     api.call.mockResolvedValueOnce({ name: 'MY-PC' });

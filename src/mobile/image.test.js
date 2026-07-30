@@ -4,21 +4,37 @@ import { coverCropRect, computeFrame } from './image.js';
 describe('computeFrame', () => {
   const usable = (vw, vh) => {
     const f = computeFrame(vw, vh);
-    return { w: vw - f.side * 2, h: vh - f.top - f.bottom, f };
+    return { w: vw - f.left - f.right, h: vh - f.top - f.bottom, f };
   };
 
-  it('leaves a large usable window in portrait', () => {
-    const { w, h } = usable(390, 844);
+  it('leaves a large usable window in portrait, with symmetric sides', () => {
+    const { w, h, f } = usable(390, 844);
     expect(w).toBeGreaterThan(300);
     expect(h).toBeGreaterThan(400);
+    expect(f.landscape).toBe(false);
+    expect(f.left).toBe(f.right);
+    // portrait reserves height at the bottom for the shutter (~142px tall zone)
+    expect(f.bottom).toBeGreaterThanOrEqual(142);
   });
 
-  it('still leaves a usable window in landscape (the rotation case)', () => {
-    const { w, h, f } = usable(844, 390);
-    expect(w).toBeGreaterThan(600);
-    expect(h).toBeGreaterThanOrEqual(96);
-    // must clear the shutter, which sits ~142px up from the bottom edge
-    expect(f.bottom).toBeGreaterThanOrEqual(142);
+  it('reserves width on the right in landscape, not height at the bottom', () => {
+    const { h, f } = usable(844, 390);
+    expect(f.landscape).toBe(true);
+    // room for the 78px shutter parked on the right edge
+    expect(f.right).toBeGreaterThanOrEqual(100);
+    expect(f.right).toBeGreaterThan(f.left);
+    // and the bottom is now just a margin, so the window is much taller
+    expect(f.bottom).toBeLessThan(100);
+    expect(h).toBeGreaterThan(200);
+    // the window must start below the status + flash/language pills (~104px)
+    expect(f.top).toBeGreaterThanOrEqual(104);
+  });
+
+  it('landscape is taller and narrower than the old bottom-shutter layout', () => {
+    const land = usable(844, 390);
+    // the previous layout produced roughly 748x158 here
+    expect(land.h).toBeGreaterThan(158);
+    expect(land.w).toBeLessThan(748);
   });
 
   it('never collapses the window, even on absurdly short viewports', () => {
@@ -39,9 +55,11 @@ describe('computeFrame', () => {
       [1024, 768],
     ]) {
       const f = computeFrame(vw, vh);
-      expect(f.side).toBeGreaterThanOrEqual(16);
-      expect(f.side).toBeLessThanOrEqual(48);
+      expect(f.left).toBeGreaterThanOrEqual(16);
+      expect(f.left).toBeLessThanOrEqual(48);
+      expect(f.right).toBeGreaterThanOrEqual(16);
       expect(f.top + f.bottom).toBeLessThan(vh);
+      expect(f.left + f.right).toBeLessThan(vw);
     }
   });
 });
