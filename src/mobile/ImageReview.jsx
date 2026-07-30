@@ -188,22 +188,31 @@ export default function ImageReview({ photo, words, pcName, sending, onSend, onR
           }}
         />
         {map.scale > 0 &&
-          bars.map((b, i) => (
-            <div
-              key={i}
-              style={{
-                position: 'absolute',
-                left: map.offX + b.x0 * map.scale - 3,
-                top: map.offY + b.y * map.scale - 2,
-                width: (b.x1 - b.x0) * map.scale + 6,
-                height: b.h * map.scale + 4,
-                borderRadius: 5,
-                background: 'color-mix(in srgb, ' + ACC + ' 40%, transparent)',
-                boxShadow: `0 0 0 1.5px ${ACC}`,
-                pointerEvents: 'none',
-              }}
-            />
-          ))}
+          bars.map((b, i) => {
+            // Sit *inside* the OCR line box rather than padding past it: line
+            // boxes include leading, so a full-height bar plus its ring used to
+            // overhang by ~3.5px a side and collide with the next line on
+            // tightly-set text. Centred on the line so it still covers the
+            // glyphs.
+            const lineH = b.h * map.scale;
+            const barH = Math.max(6, lineH * 0.78);
+            return (
+              <div
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: map.offX + b.x0 * map.scale - 3,
+                  top: map.offY + (b.y + b.h / 2) * map.scale - barH / 2,
+                  width: (b.x1 - b.x0) * map.scale + 6,
+                  height: barH,
+                  borderRadius: 4,
+                  background: 'color-mix(in srgb, ' + ACC + ' 40%, transparent)',
+                  boxShadow: `0 0 0 1px ${ACC}`,
+                  pointerEvents: 'none',
+                }}
+              />
+            );
+          })}
       </div>
 
       {/* top bar */}
