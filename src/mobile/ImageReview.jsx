@@ -4,6 +4,14 @@ import { rangeIndices, selectionText } from './selection.js';
 const ACC = '#CFFF3B';
 const COLLAPSED = 216; // bottom-sheet height when not expanded
 
+// Keep the photo (and so every selectable word) clear of the screen edges.
+// Text touching the edge would otherwise force the drag to start inside the
+// system's edge-swipe zone — which on iOS Safari and Android Chrome navigates
+// back and leaves the app mid-selection. The horizontal inset is the one that
+// matters for that; the vertical one is smaller and just for symmetry.
+const EDGE_X = 24;
+const EDGE_Y = 12;
+
 // Google-Translate-style scan review: the captured photo with a native
 // text-selection feel. Drag across the words to select a contiguous run
 // (a tap selects one word); the selection highlights as merged per-line bars.
@@ -23,7 +31,10 @@ export default function ImageReview({ photo, words, pcName, sending, onSend, onR
   const [vh, setVh] = useState(() => (typeof window === 'undefined' ? 800 : window.innerHeight));
   const expandedH = Math.max(COLLAPSED, Math.round(vh * 0.62));
 
-  // object-fit: contain mapping from image pixels to screen coordinates
+  // object-fit: contain mapping from image pixels to screen coordinates.
+  // The photo is fitted into the container minus EDGE_X/EDGE_Y, then centred
+  // in the full container — so it always keeps at least that margin, and the
+  // offsets stay absolute within the container (pointer mapping is unchanged).
   useLayoutEffect(() => {
     const measure = () => {
       setVh(window.innerHeight);
@@ -32,7 +43,9 @@ export default function ImageReview({ photo, words, pcName, sending, onSend, onR
       const cw = el.clientWidth;
       const ch = el.clientHeight;
       if (!cw || !ch) return;
-      const scale = Math.min(cw / photo.width, ch / photo.height);
+      const availW = Math.max(1, cw - EDGE_X * 2);
+      const availH = Math.max(1, ch - EDGE_Y * 2);
+      const scale = Math.min(availW / photo.width, availH / photo.height);
       setMap({ scale, offX: (cw - photo.width * scale) / 2, offY: (ch - photo.height * scale) / 2 });
     };
     measure();
@@ -170,6 +183,8 @@ export default function ImageReview({ photo, words, pcName, sending, onSend, onR
             height: photo.height * map.scale,
             userSelect: 'none',
             filter: 'brightness(.62)',
+            // makes the inset read as a deliberate frame, not a stray gap
+            borderRadius: 10,
           }}
         />
         {map.scale > 0 &&

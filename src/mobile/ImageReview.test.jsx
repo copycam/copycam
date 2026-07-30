@@ -126,6 +126,35 @@ describe('ImageReview', () => {
     expect(onRetake).toHaveBeenCalled();
   });
 
+  it('insets the photo so edge words are clear of the system back-swipe zone', () => {
+    // a photo the same aspect as the container would otherwise fill it
+    // edge-to-edge, putting words at x=0 right under the edge gesture
+    setup({ photo: { url: 'blob:x', width: 200, height: 100 } });
+    primeGeometry(); // container is 200x100
+
+    const img = screen.getByAltText('scanned');
+    const left = parseFloat(img.style.left);
+    const top = parseFloat(img.style.top);
+    const width = parseFloat(img.style.width);
+    const height = parseFloat(img.style.height);
+
+    expect(left).toBeGreaterThanOrEqual(20); // clears iOS/Android edge zones
+    expect(top).toBeGreaterThan(0);
+    // and symmetric: the photo stays fully inside the container
+    expect(left + width).toBeLessThanOrEqual(200 - 20);
+    expect(top + height).toBeLessThanOrEqual(100);
+  });
+
+  it('still maps pointers to the right word once the photo is inset', () => {
+    const { onSend } = setup();
+    const canvas = primeGeometry();
+    // tap over "two" — coordinates must account for the new inset internally
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 10 });
+    fireEvent.pointerUp(canvas);
+    fireEvent.click(screen.getByRole('button', { name: /send to MY-PC/i }));
+    expect(onSend).toHaveBeenCalledWith('two');
+  });
+
   it('the text preview lets the browser resolve bidi direction from content', () => {
     setup();
     const preview = screen.getByText(/one two three/).closest('[dir]');
