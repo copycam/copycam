@@ -242,6 +242,12 @@ export default function ImageReview({ photo, words, pcName, sending, onSend, onR
         </div>
 
         <div
+          // dir="auto" lets the browser resolve paragraph direction (and
+          // apply correct bidi shaping/alignment) from the text's own
+          // content -- needed so a right-to-left result (e.g. Arabic) reads
+          // and aligns correctly instead of being forced left-aligned by the
+          // page's default LTR direction.
+          dir="auto"
           style={{
             flex: 1,
             overflowY: 'auto',

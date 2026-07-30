@@ -7,11 +7,16 @@ import ImageReview from './ImageReview.jsx';
 const ACC = '#CFFF3B';
 const SCRIPT_STORAGE = 'copycam:script';
 
-// Recognition scripts. Every model also reads Latin, so mixed text (English +
-// Russian, English + Greek…) works as long as the non-Latin script is picked.
+// Recognition scripts. There is no real script *detection* here — "Latin +
+// CJK" is a fixed model, not a classifier, so it reads Arabic/Cyrillic/etc as
+// garbage rather than switching to them automatically. The label says exactly
+// what it covers so that isn't a surprise; picking the right script below is
+// the reliable path for anything else. Every model also reads Latin, so mixed
+// text (English + Russian, English + Greek…) works once the non-Latin script
+// is picked. The choice is remembered, so a book only needs picking once.
 const SCRIPTS = [
-  { id: 'auto', label: 'Automatic', hint: 'Latin scripts + Chinese / Japanese / Korean' },
-  { id: 'small', label: 'Automatic — best accuracy', hint: 'same coverage, slower' },
+  { id: 'auto', label: 'Latin + CJK', hint: 'English, Spanish, French… plus Chinese, Japanese, Korean. Not Arabic, Hebrew, Cyrillic, or other scripts — pick those below.' },
+  { id: 'small', label: 'Latin + CJK — more accurate', hint: 'same coverage as above, slower' },
   { id: 'cyrillic', label: 'Cyrillic', hint: 'Русский, Українська, Български + Latin' },
   { id: 'greek', label: 'Greek', hint: 'Ελληνικά + Latin' },
   { id: 'arabic', label: 'Arabic', hint: 'العربية, فارسی, اردو + Latin' },
@@ -22,7 +27,7 @@ const SCRIPTS = [
   { id: 'tamil', label: 'Tamil', hint: 'தமிழ் + Latin' },
   { id: 'telugu', label: 'Telugu', hint: 'తెలుగు + Latin' },
 ];
-const scriptLabel = (id) => SCRIPTS.find((s) => s.id === id)?.label ?? 'Automatic';
+const scriptLabel = (id) => SCRIPTS.find((s) => s.id === id)?.label ?? 'Latin + CJK';
 
 const ctlPill = {
   display: 'flex',

@@ -125,4 +125,10 @@ describe('ImageReview', () => {
     fireEvent.click(screen.getByRole('button', { name: /retake/i }));
     expect(onRetake).toHaveBeenCalled();
   });
+
+  it('the text preview lets the browser resolve bidi direction from content', () => {
+    setup();
+    const preview = screen.getByText(/one two three/).closest('[dir]');
+    expect(preview).toHaveAttribute('dir', 'auto');
+  });
 });
