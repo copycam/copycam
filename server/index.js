@@ -64,14 +64,46 @@ function desktopHtml({ qrSvg, hostname }) {
   .status{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#161616;background:#fff;
           border-radius:12px;padding:10px 16px;min-width:300px;box-shadow:0 0 0 1px rgba(0,0,0,.06)}
   .log{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#8a8a82;max-width:360px}
+  .ways{display:flex;gap:14px;align-items:stretch;max-width:660px;text-align:left}
+  .way{flex:1;background:#fff;border-radius:16px;padding:16px 18px;box-shadow:0 0 0 1px rgba(0,0,0,.06);
+       display:flex;flex-direction:column;gap:7px}
+  .way h2{margin:0;font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:7px}
+  .way .tag{font-family:ui-monospace,Menlo,monospace;font-size:9.5px;font-weight:700;letter-spacing:.6px;
+            background:#161616;color:#fff;border-radius:5px;padding:2px 6px}
+  .way ol{margin:0;padding-left:17px;font-size:12.5px;line-height:1.65;color:#55554f}
+  .way li::marker{color:#b0afa8}
+  .way code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;background:#F1F0EC;
+            border-radius:4px;padding:1px 5px}
+  .way .note{font-size:11.5px;color:#8a8a82;line-height:1.5;margin-top:auto}
+  @media (max-width:700px){ .ways{flex-direction:column} }
   .safe{display:flex;align-items:center;gap:6px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#9a9a92}
   .safe svg{flex:none}
 </style>
 <div class="card">
   <div class="logo">Copy<b>Cam</b></div>
   <div class="qr">${qrSvg}</div>
-  <div class="hint">Scan with your phone&rsquo;s camera. It opens CopyCam in the browser — same Wi&#8209;Fi, no app, no account.</div>
-  <div class="log">First time only: your phone shows a &ldquo;not private&rdquo; warning &mdash; that&rsquo;s CopyCam&rsquo;s own certificate. Tap Show&nbsp;Details (or Advanced) &rarr; Visit&nbsp;Website.</div>
+  <div class="hint">Same Wi&#8209;Fi, no account. Use it in your phone&rsquo;s browser, or in the CopyCam app.</div>
+
+  <div class="ways">
+    <div class="way">
+      <h2><span class="tag">BROWSER</span> nothing to install</h2>
+      <ol>
+        <li>Point your phone&rsquo;s camera at the code above.</li>
+        <li>Tap the link it offers.</li>
+      </ol>
+      <div class="note">First time only, your phone warns &ldquo;not private&rdquo; &mdash; that is CopyCam&rsquo;s own certificate. Tap Show&nbsp;Details (or Advanced) &rarr; Visit&nbsp;Website.</div>
+    </div>
+    <div class="way">
+      <h2><span class="tag">APP</span> flash, and faster</h2>
+      <ol>
+        <li>Install <b>Expo Go</b> from the App Store or Play Store.</li>
+        <li>On this PC run <code>npm run app</code>, then scan <i>that</i> QR to load CopyCam.</li>
+        <li>In the app, scan the code above to pair.</li>
+      </ol>
+      <div class="note">The app can switch the camera flash on, which the browser cannot, and remembers the pairing in the phone&rsquo;s secure storage.</div>
+    </div>
+  </div>
+
   <div class="status" id="status">Waiting for phone&hellip;</div>
   <div class="log" id="log"></div>
   <div class="safe">
