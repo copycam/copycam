@@ -1,6 +1,58 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { linesToParas, splitWords, SCRIPTS, lineIsRtl } from './ocr.js';
+import {
+  linesToParas,
+  splitWords,
+  SCRIPTS,
+  lineIsRtl,
+  orientationScore,
+  isConfident,
+} from './ocr.js';
+
+// A line of writing is wide and short; a quarter-turned page yields tall,
+// narrow boxes and reads badly. That is what lets the server work out which way
+// up a page was — the phone cannot, when it is held flat over a desk.
+const oline = (t, w, h) => ({ t, x: 0, y: 0, w, h });
+const REAL_TEXT = [oline('Meeting room Wi-Fi', 300, 40), oline('Network: OFFICE-GUEST', 340, 40)];
+const TURNED_TEXT = [oline('6u!199W', 40, 300), oline('>tJoM4aN', 40, 340)];
+
+describe('orientationScore', () => {
+  it('prefers a real reading over a quarter-turned one', () => {
+    expect(orientationScore(REAL_TEXT, 0.98)).toBeGreaterThan(orientationScore(TURNED_TEXT, 0.9));
+  });
+
+  it('scores nothing for an empty reading', () => {
+    expect(orientationScore([], 1)).toBe(0);
+  });
+
+  it('lets confidence break a tie between equally shaped readings', () => {
+    expect(orientationScore(REAL_TEXT, 0.98)).toBeGreaterThan(orientationScore(REAL_TEXT, 0.4));
+  });
+
+  it('rewards more text recognised', () => {
+    const more = [...REAL_TEXT, oline('Password: Tr0ub4dor', 320, 40)];
+    expect(orientationScore(more, 0.95)).toBeGreaterThan(orientationScore(REAL_TEXT, 0.95));
+  });
+});
+
+describe('isConfident (the upright fast path)', () => {
+  it('accepts a clean upright reading, so the common case costs one pass', () => {
+    expect(isConfident(REAL_TEXT, 0.97)).toBe(true);
+  });
+
+  it('rejects a quarter-turned reading', () => {
+    expect(isConfident(TURNED_TEXT, 0.97)).toBe(false);
+  });
+
+  it('rejects wide-but-unsure text, which is how an upside-down page presents', () => {
+    // precisely the case that made the search stop early and settle on 180
+    expect(isConfident(REAL_TEXT, 0.5)).toBe(false);
+  });
+
+  it('rejects an empty reading', () => {
+    expect(isConfident([], 1)).toBe(false);
+  });
+});
 
 // Real Arabic text, written here in correct logical (Unicode) order --
 // exactly what a user should end up with after the RTL fix.

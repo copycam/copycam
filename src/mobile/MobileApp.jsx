@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadKey, forgetKey, call } from './api.js';
-import { downscalePhoto, blobToBytes, frameToJpeg, computeFrame } from './image.js';
+import { downscalePhoto, blobToBytes, frameToJpeg, computeFrame, rotateBlob } from './image.js';
 import { toB64u } from '../../shared/crypto.js';
 import ImageReview from './ImageReview.jsx';
 
@@ -255,7 +255,18 @@ export default function MobileApp() {
         setPhase('error');
         return;
       }
-      setPhoto({ url: URL.createObjectURL(blob), width, height });
+      // The server reads the text to decide which way up it was and reports the
+      // turn it used; match it so the highlights land on the words.
+      let shown = { blob, width, height };
+      if (ack.rotation) {
+        try {
+          const turned = await rotateBlob(blob, ack.rotation);
+          shown = { blob: turned.blob, width: turned.width, height: turned.height };
+        } catch {
+          // keep the unrotated photo rather than losing a good scan
+        }
+      }
+      setPhoto({ url: URL.createObjectURL(shown.blob), width: shown.width, height: shown.height });
       setGeo({ words: ack.words });
       setPhase('review');
     } catch {

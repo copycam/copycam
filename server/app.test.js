@@ -25,6 +25,7 @@ const ocr = vi.fn(async () => ({
   ],
   lineCount: 2,
   text: 'SSID: HOMEBASE_5G\nPass: corgi-battery-42',
+  rotation: 90,
 }));
 
 function post(path, body, headers = {}) {
@@ -82,6 +83,8 @@ describe('companion server API', () => {
     expect(ack.words).toHaveLength(4);
     expect(ack.words[0]).toMatchObject({ t: 'SSID:', li: 0, pi: 0 });
     expect(ack.words[3]).toMatchObject({ t: 'corgi-battery-42', li: 1 });
+    // the turn the server used to read it, so the client can match its photo
+    expect(ack.rotation).toBe(90);
   });
 
   it('writes the clipboard for a valid clip message', async () => {

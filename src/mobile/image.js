@@ -32,6 +32,41 @@ export async function blobToBytes(blob) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
+// Turn a captured blob by a right angle. The server tells us which way up the
+// text actually was — a phone held flat over a page can't — and the displayed
+// photo has to match, or the highlight boxes land in the wrong place.
+export function rotateBlob(blob, degrees) {
+  return new Promise((resolve, reject) => {
+    if (!degrees) return resolve({ blob, width: 0, height: 0 });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const swap = degrees === 90 || degrees === 270 || degrees === -90;
+      const canvas = document.createElement('canvas');
+      canvas.width = swap ? img.naturalHeight : img.naturalWidth;
+      canvas.height = swap ? img.naturalWidth : img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((degrees * Math.PI) / 180);
+      ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+      canvas.toBlob(
+        (out) =>
+          out
+            ? resolve({ blob: out, width: canvas.width, height: canvas.height })
+            : reject(new Error('encode failed')),
+        'image/jpeg',
+        0.92,
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('could not read photo'));
+    };
+    img.src = url;
+  });
+}
+
 // The on-screen scan window, as CSS-px insets from the viewport edges
 // ({ left, right, top, bottom }), plus the orientation it was derived for.
 // Proportional (with clamps) so portrait and landscape both get a usable

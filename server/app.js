@@ -92,7 +92,9 @@ export function createApp({ key, hostname, distDir, allowedHosts, deps }) {
       const script = typeof msg.script === 'string' ? msg.script.toLowerCase().slice(0, 20) : undefined;
       const result = await ocr(Buffer.from(fromB64u(msg.img)), script);
       onEvent({ type: 'scanned', blocks: result.lineCount });
-      res.json(seal(key, { words: result.words }, 'ocr-ack'));
+      // `rotation` is how far the server had to turn the image to read it; the
+      // client turns its copy to match so the highlights stay aligned.
+      res.json(seal(key, { words: result.words, rotation: result.rotation ?? 0 }, 'ocr-ack'));
     } catch {
       res.status(500).json({ error: 'ocr failed' });
     }

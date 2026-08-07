@@ -1,5 +1,6 @@
 import path from 'node:path';
 import os from 'node:os';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
 import {
   PaddleOcrService,
   V6_SMALL_MODEL,
@@ -208,6 +209,52 @@ function pack(lines) {
   return { words, lineCount: lines.length, text: wordsToText(words) };
 }
 
+// ---------------------------------------------------------------------------
+// Orientation
+// ---------------------------------------------------------------------------
+// A phone held flat over a page cannot tell landscape from portrait — gravity
+// has no roll to measure — so no amount of sensor plumbing on the client can be
+// trusted to say which way up the text is. The text itself can, though: a line
+// of writing is wide and short, so if the detected line boxes come back tall
+// and narrow, the image is a quarter turn out.
+//
+// So the client sends the framed crop as-is and the server decides, trying the
+// upright guess first and falling back to the other turns only when the reading
+// is poor. It returns the rotation it settled on so the client can turn the
+// photo to match and keep the highlight boxes aligned.
+
+export function orientationScore(lines, confidence = 1) {
+  if (!lines.length) return 0;
+  const chars = lines.reduce((sum, l) => sum + l.t.replace(/\s+/g, '').length, 0);
+  const wide = lines.filter((l) => l.w >= l.h).length / lines.length;
+  // Characters recognised is the dominant signal — a quarter-turned page reads
+  // as near-gibberish — with line shape and the recogniser's own confidence
+  // breaking ties. Upside-down text is the hard case: it still produces wide
+  // boxes, so it can only be told apart by reading worse.
+  return chars * (0.25 + 0.75 * wide) * (0.5 + 0.5 * confidence);
+}
+
+// Good enough to stop looking, used only for the upright first pass: plenty of
+// text, in line-shaped boxes, that the recogniser itself was sure of. The
+// confidence bar is what keeps upside-down gibberish from qualifying.
+export function isConfident(lines, confidence = 1) {
+  if (lines.length === 0) return false;
+  const chars = lines.reduce((sum, l) => sum + l.t.replace(/\s+/g, '').length, 0);
+  const wide = lines.filter((l) => l.w >= l.h).length / lines.length;
+  return chars >= 12 && wide >= 0.6 && confidence >= 0.85;
+}
+
+async function rotateImage(buffer, degrees) {
+  const img = await loadImage(buffer);
+  const swap = degrees === 90 || degrees === 270;
+  const canvas = createCanvas(swap ? img.height : img.width, swap ? img.width : img.height);
+  const ctx = canvas.getContext('2d');
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate((degrees * Math.PI) / 180);
+  ctx.drawImage(img, -img.width / 2, -img.height / 2);
+  return canvas.toBuffer('image/jpeg', 0.92);
+}
+
 async function recognizePaddle(imageBuffer, script) {
   const svc = await getPaddle(script);
   const ab = imageBuffer.buffer.slice(imageBuffer.byteOffset, imageBuffer.byteOffset + imageBuffer.byteLength);
@@ -221,7 +268,7 @@ async function recognizePaddle(imageBuffer, script) {
     .map((wordsOnLine) => ({ t: wordsOnLine.map((w) => w.text).join(' ').trim(), ...unionBox(wordsOnLine) }))
     .filter((l) => l.t)
     .slice(0, 60);
-  return pack(lines);
+  return { ...pack(lines), lines, confidence: result.confidence ?? 1 };
 }
 
 async function recognizeTesseract(imageBuffer) {
@@ -240,23 +287,57 @@ async function recognizeTesseract(imageBuffer) {
       }
     }
   }
-  return pack(lines.slice(0, 60));
+  const capped = lines.slice(0, 60);
+  return { ...pack(capped), lines: capped };
 }
 
-// Resolves to { words: [{ t, x, y, w, h, li, pi }], lineCount, text }.
+// Resolves to { words: [{ t, x, y, w, h, li, pi }], lineCount, text, rotation }.
 // `words` carries pixel-space geometry (line index li, paragraph index pi) for
-// the image-overlay review UI's word-level drag selection.
+// the image-overlay review UI's word-level drag selection, expressed in the
+// frame of the image *after* `rotation` degrees — the client turns its copy of
+// the photo by the same amount so the highlights line up.
 // `script` picks the recognition model (see SCRIPT_MODELS); unknown values
 // fall back to the unified model rather than failing the scan.
 export async function recognize(imageBuffer, script = DEFAULT_SCRIPT) {
   const key = SCRIPT_MODELS[script] !== undefined || script === 'auto' ? script : 'auto';
   try {
-    const out = await recognizePaddle(imageBuffer, key);
-    if (out.words.length) return out;
+    // Upright first: the overwhelmingly common case, and it costs one pass.
+    let best = { ...(await recognizePaddle(imageBuffer, key)), rotation: 0 };
+    if (isConfident(best.lines, best.confidence)) return strip(best);
+
+    // Otherwise weigh every turn and take the best reading. Deliberately no
+    // early exit here: upside-down text also yields wide, plausible-looking
+    // boxes, so stopping at the first "good enough" candidate picks 180° out
+    // instead of the true orientation. Four passes only happen on a scan that
+    // already failed to read upright.
+    let bestScore = orientationScore(best.lines, best.confidence);
+    for (const deg of [90, 270, 180]) {
+      let candidate;
+      try {
+        candidate = {
+          ...(await recognizePaddle(await rotateImage(imageBuffer, deg), key)),
+          rotation: deg,
+        };
+      } catch {
+        continue; // a failed turn must never lose us the reading we have
+      }
+      const score = orientationScore(candidate.lines, candidate.confidence);
+      if (score > bestScore) {
+        best = candidate;
+        bestScore = score;
+      }
+    }
+    if (best.words.length) return strip(best);
   } catch (err) {
     console.warn('PaddleOCR failed, falling back to tesseract:', err.message);
   }
-  return recognizeTesseract(imageBuffer);
+  return { ...(await recognizeTesseract(imageBuffer)), rotation: 0 };
+}
+
+// `lines` is an internal scoring aid; the wire format stays words-only.
+function strip({ lines, ...rest }) {
+  void lines;
+  return rest;
 }
 
 export async function warmup() {
