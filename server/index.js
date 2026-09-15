@@ -36,15 +36,27 @@ function loadOrCreateKey({ reset }) {
   return { key, isNew: true };
 }
 
+// Adapters a phone on the Wi-Fi can never reach. WSL and Hyper-V hand out
+// 192.168.* addresses too, so preferring that range alone picked the WSL
+// switch (it enumerates first) and put an unreachable address in the QR.
+const VIRTUAL_ADAPTER = /vethernet|wsl|hyper-v|virtualbox|vmware|docker|vbox|loopback|tailscale|zerotier/i;
+
 function lanIPs() {
-  const out = [];
-  for (const ifaces of Object.values(os.networkInterfaces())) {
+  const real = [];
+  const virtual = [];
+  for (const [name, ifaces] of Object.entries(os.networkInterfaces())) {
     for (const i of ifaces || []) {
-      if (i.family === 'IPv4' && !i.internal) out.push(i.address);
+      // 169.254.* is self-assigned (Wi-Fi Direct, a cable with no DHCP): never reachable
+      if (i.family !== 'IPv4' || i.internal || i.address.startsWith('169.254.')) continue;
+      (VIRTUAL_ADAPTER.test(name) ? virtual : real).push(i.address);
     }
   }
-  // prefer private ranges, most home LANs are 192.168.*
-  return out.sort((a, b) => b.startsWith('192.168.') - a.startsWith('192.168.'));
+  // prefer private ranges, most home LANs are 192.168.*; virtual adapters are
+  // kept last as a fallback rather than dropped, so an unusual setup still starts
+  const byRange = (a, b) => b.startsWith('192.168.') - a.startsWith('192.168.');
+  const ips = [...real.sort(byRange), ...virtual.sort(byRange)];
+  // escape hatch when the guess is still wrong
+  return process.env.CC_IP ? [process.env.CC_IP, ...ips.filter((ip) => ip !== process.env.CC_IP)] : ips;
 }
 
 function desktopHtml({ qrSvg, hostname }) {
