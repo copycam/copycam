@@ -1,6 +1,6 @@
 import path from 'node:path';
 import express from 'express';
-import { open, seal, fromB64u } from '../shared/crypto.js';
+import { open, seal, fromB64u, MAX_AGE_MS } from '../shared/crypto.js';
 
 // App factory with injectable deps so tests can swap clipboard/OCR.
 //
@@ -8,8 +8,9 @@ import { open, seal, fromB64u } from '../shared/crypto.js';
 // - Possession of the 32-byte session key (delivered only via the QR code's
 //   URL fragment) is the sole credential. Every /api payload must decrypt
 //   and authenticate under AES-256-GCM with a per-endpoint AAD.
-// - Replay: nonces are single-use per process; envelope timestamps bound
-//   cross-restart replays.
+// - Replay: nonces are single-use per process for as long as a message could
+//   still pass the freshness check; envelope timestamps bound cross-restart
+//   replays.
 // - /desktop (shows the QR, i.e. the key) is loopback-only.
 // - Host header allow-list blunts DNS-rebinding tricks from random websites.
 
@@ -19,9 +20,52 @@ export function isLoopback(remoteAddress) {
   return LOOPBACK.has(remoteAddress);
 }
 
+// Every Host a legitimate request can carry. Both clients derive their address
+// from the pairing QR: the browser opens https://<host>:PORT, and the native
+// app talks to http://<same host>:DESKTOP_PORT. So whatever host the QR carries
+// — a LAN IP, or CC_DOMAIN when a trusted certificate is in use — has to be
+// accepted on both ports. Missing the domain on the cleartext port meant the
+// native app got 403 on every request once a trusted certificate was set up.
+export function buildAllowedHosts({ ips, domain, port, desktopPort }) {
+  const hosts = [`localhost:${desktopPort}`, `127.0.0.1:${desktopPort}`];
+  for (const host of [...(domain ? [domain.toLowerCase()] : []), ...ips]) {
+    hosts.push(`${host}:${port}`, `${host}:${desktopPort}`);
+  }
+  return new Set(hosts);
+}
+
+// Nonces seen recently enough that their message could still be accepted.
+// A message is fresh while |now - t| <= MAX_AGE_MS, so a nonce must be
+// remembered until the latest moment its message could pass that check:
+// received + 2 * MAX_AGE_MS covers a sender clock running up to MAX_AGE_MS
+// ahead. Entries are inserted in arrival order, so expired ones are always at
+// the front and pruning stops at the first live one.
+//
+// This replaced a Set that was simply cleared once it held 5000 entries. Every
+// nonce from the two minutes before a clear became replayable again, which is
+// not what "single-use" promises.
+export function createNonceLedger(windowMs = 2 * MAX_AGE_MS) {
+  const seen = new Map(); // nonce -> expiry
+  return {
+    // true the first time a nonce is offered, false for a replay
+    claim(nonce, now = Date.now()) {
+      for (const [n, expiry] of seen) {
+        if (expiry > now) break;
+        seen.delete(n);
+      }
+      if (seen.has(nonce)) return false;
+      seen.set(nonce, now + windowMs);
+      return true;
+    },
+    get size() {
+      return seen.size;
+    },
+  };
+}
+
 export function createApp({ key, hostname, distDir, allowedHosts, deps }) {
   const { clipboard, ocr, onEvent = () => {} } = deps;
-  const seenNonces = new Set();
+  const nonces = createNonceLedger();
   const hits = new Map(); // per-IP rolling request timestamps for /api
 
   const app = express();
@@ -54,6 +98,12 @@ export function createApp({ key, hostname, distDir, allowedHosts, deps }) {
     const list = (hits.get(ip) || []).filter((t) => now - t < 60_000);
     list.push(now);
     hits.set(ip, list);
+    // forget addresses that have gone quiet, so the table can't only ever grow
+    if (hits.size > 256) {
+      for (const [addr, times] of hits) {
+        if (!times.some((t) => now - t < 60_000)) hits.delete(addr);
+      }
+    }
     if (list.length > 60) return res.status(429).json({ error: 'slow down' });
     next();
   });
@@ -62,10 +112,10 @@ export function createApp({ key, hostname, distDir, allowedHosts, deps }) {
 
   // Decrypt + authenticate a request body; enforce single-use nonces.
   const unseal = (req, aad) => {
+    // open() first: only an authenticated message may occupy the ledger, so
+    // someone without the key can't fill it
     const msg = open(key, req.body, aad);
-    if (seenNonces.has(req.body.n)) throw new Error('replayed nonce');
-    seenNonces.add(req.body.n);
-    if (seenNonces.size > 5000) seenNonces.clear();
+    if (!nonces.claim(req.body.n)) throw new Error('replayed nonce');
     return msg;
   };
 

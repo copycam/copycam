@@ -1,7 +1,7 @@
 // @vitest-environment node
 import os from 'node:os';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { createApp, isLoopback } from './app.js';
+import { createApp, isLoopback, buildAllowedHosts, createNonceLedger } from './app.js';
 import { seal, open, newKey, toB64u, MAX_AGE_MS } from '../shared/crypto.js';
 
 function lanIP() {
@@ -211,5 +211,58 @@ describe('cleartext listener exposed on the LAN', () => {
       body: JSON.stringify({ text: 'plaintext, no key' }),
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('allowed hosts', () => {
+  const ports = { port: 8787, desktopPort: 8788 };
+
+  it('accepts every LAN address on both listeners', () => {
+    const hosts = buildAllowedHosts({ ips: ['192.168.0.181', '192.168.128.1'], ...ports });
+    for (const h of ['192.168.0.181:8787', '192.168.0.181:8788', '192.168.128.1:8788']) {
+      expect(hosts.has(h)).toBe(true);
+    }
+  });
+
+  it('accepts the CC_DOMAIN host on the cleartext port the native app uses', () => {
+    // the QR carries https://<domain>:8787/?h=8788 and the app derives
+    // http://<domain>:8788 from it — that used to be refused with 403
+    const hosts = buildAllowedHosts({ ips: ['192.168.0.181'], domain: 'CopyCam.Example.com', ...ports });
+    expect(hosts.has('copycam.example.com:8787')).toBe(true);
+    expect(hosts.has('copycam.example.com:8788')).toBe(true);
+  });
+
+  it('keeps loopback to the desktop port, and nothing else', () => {
+    const hosts = buildAllowedHosts({ ips: [], ...ports });
+    expect(hosts.has('localhost:8788')).toBe(true);
+    expect(hosts.has('127.0.0.1:8788')).toBe(true);
+    expect(hosts.has('localhost:8787')).toBe(false);
+    expect(hosts.has('evil.example:8788')).toBe(false);
+  });
+});
+
+describe('nonce ledger', () => {
+  it('refuses a nonce offered twice', () => {
+    const ledger = createNonceLedger(1000);
+    expect(ledger.claim('a', 0)).toBe(true);
+    expect(ledger.claim('a', 10)).toBe(false);
+  });
+
+  it('still refuses a replay after thousands of other messages', () => {
+    // the old Set was cleared at 5000 entries, which made every recent nonce
+    // replayable again for as long as its message stayed fresh
+    const ledger = createNonceLedger(MAX_AGE_MS * 2);
+    expect(ledger.claim('captured', 0)).toBe(true);
+    for (let i = 0; i < 6000; i++) ledger.claim(`n${i}`, i);
+    expect(ledger.claim('captured', 6000)).toBe(false);
+  });
+
+  it('forgets nonces once their messages could no longer pass the freshness check', () => {
+    const ledger = createNonceLedger(1000);
+    ledger.claim('old', 0);
+    ledger.claim('newer', 900);
+    expect(ledger.claim('probe', 1500)).toBe(true); // prunes 'old', keeps 'newer'
+    expect(ledger.size).toBe(2);
+    expect(ledger.claim('newer', 1500)).toBe(false);
   });
 });

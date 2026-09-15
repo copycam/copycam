@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
 import clipboard from 'clipboardy';
 import { newKey, toB64u, fromB64u } from '../shared/crypto.js';
-import { createApp } from './app.js';
+import { createApp, buildAllowedHosts } from './app.js';
 import { recognize, warmup } from './ocr.js';
 import { loadTlsMaterial } from './tls.js';
 
@@ -15,8 +15,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, '..', 'dist');
 const KEY_FILE = path.join(os.homedir(), '.copycam', 'key.json');
 const CERT_FILE = path.join(os.homedir(), '.copycam', 'tls.json');
-// HTTPS for phones (iOS HTTPS-Only mode rejects plain http URLs);
-// plain HTTP for the desktop page, bound to loopback only.
+// HTTPS on PORT for the browser build (iOS HTTPS-Only mode rejects plain http
+// URLs). Plain HTTP on PORT+1 for the native app and the desktop page, on every
+// interface — /desktop* itself is loopback-gated in createApp.
 const PORT = Number(process.env.PORT) || 8787;
 const DESKTOP_PORT = PORT + 1;
 
@@ -164,12 +165,7 @@ async function main() {
   // sealed with AES-256-GCM, and unlike the browser build there is no served
   // page for a network attacker to tamper with. The browser build ignores `h`.
   const pairUrl = `https://${pairHost}:${PORT}/?h=${DESKTOP_PORT}#k=${toB64u(key)}`;
-  const allowedHosts = new Set([
-    `localhost:${DESKTOP_PORT}`,
-    `127.0.0.1:${DESKTOP_PORT}`,
-    ...(domain ? [`${domain.toLowerCase()}:${PORT}`] : []),
-    ...ips.flatMap((i) => [`${i}:${PORT}`, `${i}:${DESKTOP_PORT}`]),
-  ]);
+  const allowedHosts = buildAllowedHosts({ ips, domain, port: PORT, desktopPort: DESKTOP_PORT });
 
   const app = createApp({
     key,
