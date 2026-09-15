@@ -81,23 +81,71 @@ describe('ImageReview', () => {
     expect(onSend).toHaveBeenCalledWith('two');
   });
 
+  const sheetHeight = () => parseInt(screen.getByLabelText('Drag to preview').parentElement.style.height, 10);
+
   it('the grabber toggles the preview sheet open and closed', () => {
     setup();
-    expect(screen.getByText(/swipe up for full preview/i)).toBeInTheDocument();
+    const collapsed = sheetHeight();
     const grabber = screen.getByLabelText('Drag to preview');
     fireEvent.pointerDown(grabber, { clientY: 500 });
     fireEvent.pointerUp(grabber, { clientY: 500 });
-    expect(screen.getByText(/swipe down to collapse/i)).toBeInTheDocument();
+    expect(sheetHeight()).toBeGreaterThan(collapsed);
+    fireEvent.pointerDown(grabber, { clientY: 500 });
+    fireEvent.pointerUp(grabber, { clientY: 500 });
+    expect(sheetHeight()).toBe(collapsed);
   });
 
   it('the whole header row drags the sheet, not just the grabber pill', () => {
     setup();
+    const collapsed = sheetHeight();
     // press on the status text (well away from the little grabber pill)
     const status = screen.getByText(/words selected/i);
     fireEvent.pointerDown(status, { clientY: 600 });
     fireEvent.pointerMove(status, { clientY: 380 }); // drag upward
     fireEvent.pointerUp(status, { clientY: 380 });
-    expect(screen.getByText(/swipe down to collapse/i)).toBeInTheDocument();
+    expect(sheetHeight()).toBeGreaterThan(collapsed);
+  });
+
+  it('edits the text before sending, and sends the edit', () => {
+    const { onSend } = setup();
+    fireEvent.click(screen.getByRole('button', { name: /edit the text/i }));
+    const editor = screen.getByLabelText('Text to send');
+    expect(editor).toHaveValue('one two three\n\nfour');
+    fireEvent.change(editor, { target: { value: 'one TWO three' } });
+    fireEvent.click(screen.getByRole('button', { name: /done/i }));
+    expect(screen.getByText(/edited · 13 characters/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /send to MY-PC/i }));
+    expect(onSend).toHaveBeenCalledWith('one TWO three');
+  });
+
+  it('keeps an edit when the selection changes, until the edit is discarded', () => {
+    const { onSend } = setup();
+    fireEvent.click(screen.getByRole('button', { name: /edit the text/i }));
+    fireEvent.change(screen.getByLabelText('Text to send'), { target: { value: 'typed by hand' } });
+    fireEvent.click(screen.getByRole('button', { name: /done/i }));
+
+    // changing the selection must not silently throw the typing away
+    fireEvent.click(screen.getByRole('button', { name: /^clear$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send to MY-PC/i }));
+    expect(onSend).toHaveBeenLastCalledWith('typed by hand');
+
+    fireEvent.click(screen.getByRole('button', { name: /discard edits/i }));
+    expect(screen.getByRole('button', { name: /select text to send/i })).toBeDisabled();
+  });
+
+  it('opening the editor and closing it unchanged is not an edit', () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: /edit the text/i }));
+    fireEvent.click(screen.getByRole('button', { name: /done/i }));
+    expect(screen.queryByRole('button', { name: /discard edits/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/4 words selected/i)).toBeInTheDocument();
+  });
+
+  it('shows a failed send inline and offers to send again', () => {
+    const { onSend } = setup({ sendError: 'Couldn’t reach your computer.' });
+    expect(screen.getByRole('alert')).toHaveTextContent(/couldn’t reach/i);
+    fireEvent.click(screen.getByRole('button', { name: /try sending again/i }));
+    expect(onSend).toHaveBeenCalledWith('one two three\n\nfour');
   });
 
   it('rotating to a shorter screen never leaves the sheet taller than the viewport', () => {

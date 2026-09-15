@@ -1,10 +1,42 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { loadKey, forgetKey, call } from './api.js';
+import { loadKey, forgetKey, call, isConnectionError, isPairingRejected } from './api.js';
 import { downscalePhoto, blobToBytes, frameToJpeg, computeFrame, rotateBlob } from './image.js';
 import { toB64u } from '../../shared/crypto.js';
 import ImageReview from './ImageReview.jsx';
 
 const ACC = '#CFFF3B';
+
+// What each failure tells the user — the same wording and the same ways out as
+// the native app (mobile/App.tsx), so the two clients stay one product.
+const COPY = {
+  unreachable:
+    'Check CopyCam is still running on your computer and that both are on the same Wi-Fi. If its address changed, rescanning the QR it shows always re-links.',
+  lostMidScan: 'The photo didn’t reach your computer. Check it’s still running and on the same Wi-Fi.',
+  pairingRejected:
+    'Your computer no longer recognises this phone — its pairing code has changed. Scan the QR on its screen again.',
+  noText: 'Nothing readable inside the frame. Move closer so the text fills it, and make sure it’s well lit.',
+};
+
+// A connection problem offers a retry and a rescan; a scan problem just goes
+// back to the camera. Retrying the connection after a photo with no text in it
+// was pointless, and that was the only button on offer.
+const connectionProblem = (e) => ({
+  kind: 'connection',
+  message: isPairingRejected(e) ? COPY.pairingRejected : COPY.unreachable,
+});
+
+const ctaPrimary = {
+  border: 'none',
+  cursor: 'pointer',
+  background: '#161616',
+  color: '#fff',
+  fontSize: 15,
+  fontWeight: 700,
+  padding: '15px 22px',
+  borderRadius: 999,
+  fontFamily: 'inherit',
+};
+const ctaSecondary = { ...ctaPrimary, background: 'rgba(0,0,0,.05)', color: '#161616', fontWeight: 600 };
 const SCRIPT_STORAGE = 'copycam:script';
 
 // Recognition scripts. There is no real script *detection* here — "Latin +
@@ -95,7 +127,10 @@ export default function MobileApp() {
   // captured photo {url,width,height} + word geometry for the overlay review
   const [photo, setPhoto] = useState(null);
   const [geo, setGeo] = useState(null);
-  const [errorMsg, setErrorMsg] = useState('');
+  // { kind: 'connection', message } | { kind: 'scan', title, message }
+  const [problem, setProblem] = useState(null);
+  const [retrying, setRetrying] = useState(false);
+  const [sendError, setSendError] = useState(null);
   // 'starting' -> 'live' (viewfinder running) | 'fallback' (photo-picker mode)
   const [cam, setCam] = useState('starting');
   // torch (camera flash) — only some browsers expose it; iOS Safari never does
@@ -210,11 +245,28 @@ export default function MobileApp() {
         setPcName(ack.name);
         setPhase('idle');
       })
-      .catch(() => {
-        setErrorMsg('Can’t reach your computer. If CopyCam is running there and you’re on the same Wi-Fi, just rescan the QR it shows — that always re-links.');
+      .catch((e) => {
+        setProblem(connectionProblem(e));
         setPhase('error');
       });
   }, []);
+
+  // Try again stays on the problem screen and shows progress on its own button,
+  // matching the native app, instead of bouncing through the linking screen.
+  const retryConnection = async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      const ack = await call(keyRef.current, 'hello', {});
+      setPcName(ack.name);
+      setProblem(null);
+      setPhase('idle');
+    } catch (e) {
+      setProblem(connectionProblem(e));
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   useEffect(() => {
     const key = loadKey();
@@ -251,7 +303,7 @@ export default function MobileApp() {
       const bytes = await blobToBytes(blob);
       const ack = await call(keyRef.current, 'ocr', { img: toB64u(bytes), script });
       if (!ack.words?.length) {
-        setErrorMsg('No text found in that photo — try again, closer and well-lit.');
+        setProblem({ kind: 'scan', title: 'No text found', message: COPY.noText });
         setPhase('error');
         return;
       }
@@ -268,9 +320,14 @@ export default function MobileApp() {
       }
       setPhoto({ url: URL.createObjectURL(shown.blob), width: shown.width, height: shown.height });
       setGeo({ words: ack.words });
+      setSendError(null);
       setPhase('review');
-    } catch {
-      setErrorMsg('Scan failed. Check that your computer is still on the same Wi-Fi.');
+    } catch (e) {
+      setProblem(
+        isConnectionError(e) || isPairingRejected(e)
+          ? { kind: 'connection', message: isPairingRejected(e) ? COPY.pairingRejected : COPY.lostMidScan }
+          : { kind: 'scan', title: 'That scan didn’t work', message: 'Something went wrong reading the photo. Try again.' },
+      );
       setPhase('error');
     }
   };
@@ -303,32 +360,44 @@ export default function MobileApp() {
     try {
       await submitJpeg(await downscalePhoto(file));
     } catch {
-      setErrorMsg('Could not read that photo — try again.');
+      setProblem({ kind: 'scan', title: 'Couldn’t open that photo', message: 'Try taking it again.' });
       setPhase('error');
     }
   };
 
   const sendText = async (text) => {
     if (!text || phase !== 'review') return;
+    setSendError(null);
     setPhase('sending');
     try {
       await call(keyRef.current, 'clip', { text });
       clearPhoto();
       setPhase('sent');
       resetTimer.current = setTimeout(() => setPhase('idle'), 2300);
-    } catch {
-      setErrorMsg('Sending failed — is CopyCam still running on your computer?');
-      setPhase('error');
+    } catch (e) {
+      // stay on the review: the photo, selection and any edits all survive, so
+      // the fix is one more tap rather than a rescan
+      setSendError(
+        isPairingRejected(e)
+          ? 'Your computer no longer recognises this phone. Retake, then rescan its QR.'
+          : isConnectionError(e)
+            ? 'Couldn’t reach your computer. Check it’s running and on the same Wi-Fi.'
+            : 'Your computer couldn’t put that on its clipboard.',
+      );
+      setPhase('review');
     }
   };
 
   const rescan = () => {
     clearPhoto();
+    setSendError(null);
+    setProblem(null);
     setPhase('idle');
   };
 
   const rePair = () => {
     forgetKey();
+    setProblem(null);
     setPhase('unpaired');
   };
 
@@ -353,16 +422,27 @@ export default function MobileApp() {
             Start CopyCam on your computer and scan the QR code it shows with your phone camera. That's the whole setup.
           </div>
         )}
-        {phase === 'error' && (
-          <>
-            <div style={{ fontSize: 14.5, lineHeight: 1.5, color: '#55554f', maxWidth: 280 }}>{errorMsg}</div>
-            <button onClick={connect} style={{ border: 'none', cursor: 'pointer', background: '#161616', color: '#fff', fontSize: 14, fontWeight: 600, padding: '13px 22px', borderRadius: 999, fontFamily: 'inherit' }}>
-              Try again
-            </button>
-            <button onClick={rePair} style={{ border: 'none', cursor: 'pointer', background: 'none', color: '#8a8a82', fontSize: 13, fontWeight: 600, padding: 4, fontFamily: 'inherit' }}>
-              Forget pairing
-            </button>
-          </>
+        {phase === 'error' && problem && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 10, width: '100%', maxWidth: 320 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.4 }}>
+              {problem.kind === 'connection' ? `Can’t reach ${pcName || 'your computer'}` : problem.title}
+            </div>
+            <div style={{ fontSize: 14.5, lineHeight: 1.5, color: '#55554f', marginBottom: 14 }}>{problem.message}</div>
+            {problem.kind === 'connection' ? (
+              <>
+                <button onClick={retryConnection} disabled={retrying} style={{ ...ctaPrimary, opacity: retrying ? 0.8 : 1 }}>
+                  {retrying ? 'Reconnecting…' : 'Try again'}
+                </button>
+                <button onClick={rePair} style={ctaSecondary}>
+                  Scan the pairing code again
+                </button>
+              </>
+            ) : (
+              <button onClick={rescan} style={ctaPrimary}>
+                Scan again
+              </button>
+            )}
+          </div>
         )}
         <div style={{ position: 'absolute', bottom: 'max(28px, env(safe-area-inset-bottom))', left: 0, right: 0 }}>
           <SafetyNote text="end-to-end encrypted · use Wi-Fi you trust" />
@@ -596,6 +676,7 @@ export default function MobileApp() {
           words={geo.words}
           pcName={pcName}
           sending={sending}
+          sendError={sendError}
           onSend={sendText}
           onRetake={rescan}
         />

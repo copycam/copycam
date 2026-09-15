@@ -15,8 +15,10 @@ const EDGE_Y = 12;
 // Google-Translate-style scan review: the captured photo with a native
 // text-selection feel. Drag across the words to select a contiguous run
 // (a tap selects one word); the selection highlights as merged per-line bars.
-// The bottom sheet swipes up to preview exactly what will be sent.
-export default function ImageReview({ photo, words, pcName, sending, onSend, onRetake }) {
+// The bottom sheet swipes up to preview exactly what will be sent, and the
+// text can be edited before sending — the same behaviour as the native app's
+// review (mobile/src/screens/ReviewScreen.tsx).
+export default function ImageReview({ photo, words, pcName, sending, sendError = null, onSend, onRetake }) {
   const containerRef = useRef(null);
   const drag = useRef(null);
   const sheetDrag = useRef(null);
@@ -62,9 +64,33 @@ export default function ImageReview({ photo, words, pcName, sending, onSend, onR
     setSheetH((h) => Math.min(h, expandedH));
   }, [expandedH]);
 
-  const indices = rangeIndices(sel?.anchor, sel?.focus);
+  const indices = useMemo(() => rangeIndices(sel?.anchor, sel?.focus), [sel]);
   const n = indices.length;
-  const text = selectionText(words, indices);
+  const selected = useMemo(() => selectionText(words, indices), [words, indices]);
+
+  // Editing. `draft` is null until the editor opens; while it differs from the
+  // selection it is what gets sent, and later selection changes don't
+  // overwrite it — silently discarding typed corrections would be worse than
+  // stale text. "Discard edits" is the one way back to the selection.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const edited = draft !== null && draft !== selected;
+  const text = edited ? draft : selected;
+  const canSend = text.trim().length > 0 && !sending;
+
+  const startEditing = () => {
+    setDraft((d) => d ?? selected);
+    setEditing(true);
+    setSheetH(expandedH); // give the editor room
+  };
+  const finishEditing = () => {
+    setEditing(false);
+    setDraft((d) => (d === null || d === selected ? null : d));
+  };
+  const discardEdits = () => setDraft(editing ? selected : null);
+  // buttons inside the draggable header must not start a sheet drag, or the
+  // pointer capture it takes swallows their click
+  const noDrag = (e) => e.stopPropagation();
 
   // one merged highlight bar per line covering its selected span
   const bars = useMemo(() => {
@@ -144,6 +170,34 @@ export default function ImageReview({ photo, words, pcName, sending, onSend, onR
       if (!moved) return h > COLLAPSED + 10 ? COLLAPSED : expandedH; // tap toggles
       return h > (COLLAPSED + expandedH) / 2 ? expandedH : COLLAPSED;
     });
+  };
+
+  const chip = {
+    border: 'none',
+    cursor: 'pointer',
+    borderRadius: 999,
+    padding: '7px 13px',
+    fontSize: 13,
+    fontWeight: 600,
+    fontFamily: 'inherit',
+    background: 'rgba(0,0,0,.06)',
+    color: '#161616',
+  };
+
+  const previewBox = {
+    flex: 1,
+    overflowY: 'auto',
+    margin: '0 14px 10px',
+    padding: '10px 12px',
+    background: '#fff',
+    borderRadius: 12,
+    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.06)',
+    fontFamily: 'ui-monospace,Menlo,monospace',
+    fontSize: 13,
+    lineHeight: 1.5,
+    color: '#26261f',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
   };
 
   const pill = {
@@ -269,59 +323,96 @@ export default function ImageReview({ photo, words, pcName, sending, onSend, onR
           aria-label="Drag to preview"
         >
           <div style={{ width: 44, height: 5, borderRadius: 3, background: 'rgba(0,0,0,.18)', margin: '0 auto' }} />
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '14px 18px 16px' }}>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: '#8a8a82' }}>
-              {n === 0 ? 'Nothing selected' : `${n} word${n === 1 ? '' : 's'} selected`}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 18px 12px' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: edited || editing ? '#161616' : '#8a8a82', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {editing
+                ? 'Editing text'
+                : edited
+                  ? `Edited · ${text.length} character${text.length === 1 ? '' : 's'}`
+                  : n === 0
+                    ? 'Nothing selected'
+                    : `${n} word${n === 1 ? '' : 's'} selected`}
             </span>
-            <span style={{ fontSize: 12, color: '#b0afa8' }}>{sheetH > COLLAPSED + 10 ? 'swipe down to collapse' : 'swipe up for full preview'}</span>
+            <span style={{ display: 'flex', gap: 8, flex: 'none' }}>
+              {edited && (
+                <button onPointerDown={noDrag} onClick={discardEdits} style={chip}>
+                  {editing ? 'Reset' : 'Discard edits'}
+                </button>
+              )}
+              {editing ? (
+                <button onPointerDown={noDrag} onClick={finishEditing} style={{ ...chip, background: '#161616', color: '#fff' }}>
+                  Done
+                </button>
+              ) : (
+                <button onPointerDown={noDrag} onClick={startEditing} style={chip} aria-label="Edit the text before sending">
+                  Edit
+                </button>
+              )}
+            </span>
           </div>
         </div>
 
-        <div
-          // dir="auto" lets the browser resolve paragraph direction (and
-          // apply correct bidi shaping/alignment) from the text's own
-          // content -- needed so a right-to-left result (e.g. Arabic) reads
-          // and aligns correctly instead of being forced left-aligned by the
-          // page's default LTR direction.
-          dir="auto"
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            margin: '0 14px 10px',
-            padding: '10px 12px',
-            background: '#fff',
-            borderRadius: 12,
-            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.06)',
-            fontFamily: 'ui-monospace,Menlo,monospace',
-            fontSize: 13,
-            lineHeight: 1.5,
-            color: '#26261f',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-          }}
-        >
-          {n === 0 ? <span style={{ color: '#b0afa8' }}>Drag across the photo to select text.</span> : text}
-        </div>
+        {editing ? (
+          <textarea
+            // dir="auto": a right-to-left result (e.g. Arabic) must read and
+            // align correctly while being edited, same as in the preview
+            dir="auto"
+            autoFocus
+            value={draft ?? ''}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Type or fix the text to send"
+            aria-label="Text to send"
+            style={{ ...previewBox, resize: 'none', border: 'none', outline: 'none', boxShadow: 'inset 0 0 0 1.5px rgba(22,22,22,.35)' }}
+          />
+        ) : (
+          <div
+            // dir="auto" lets the browser resolve paragraph direction (and
+            // apply correct bidi shaping/alignment) from the text's own
+            // content -- needed so a right-to-left result (e.g. Arabic) reads
+            // and aligns correctly instead of being forced left-aligned by the
+            // page's default LTR direction.
+            dir="auto"
+            onClick={text ? startEditing : undefined}
+            style={previewBox}
+          >
+            {text.length === 0 ? (
+              <span style={{ color: '#b0afa8' }}>Drag across the photo to select text, or tap Edit to type it yourself.</span>
+            ) : (
+              text
+            )}
+          </div>
+        )}
 
         <div style={{ padding: '0 18px calc(14px + env(safe-area-inset-bottom))', flex: 'none' }}>
+          {sendError && !sending && (
+            <div role="alert" style={{ color: '#D93F3F', fontSize: 13, textAlign: 'center', marginBottom: 8 }}>
+              {sendError}
+            </div>
+          )}
           <button
-            onClick={() => n > 0 && !sending && onSend(text)}
-            disabled={n === 0}
+            onClick={() => canSend && onSend(text)}
+            disabled={!canSend}
             style={{
               width: '100%',
               border: 'none',
-              cursor: n === 0 ? 'default' : 'pointer',
+              cursor: canSend ? 'pointer' : 'default',
               borderRadius: 999,
-              padding: '14px 20px',
+              padding: '15px 20px',
               fontSize: 15,
               fontWeight: 700,
               fontFamily: 'inherit',
               transition: 'all .2s',
-              background: n === 0 ? 'rgba(0,0,0,.08)' : sending ? '#161616' : ACC,
-              color: n === 0 ? 'rgba(0,0,0,.35)' : sending ? '#fff' : '#161616',
+              background: sending ? '#161616' : !canSend ? 'rgba(0,0,0,.08)' : ACC,
+              color: sending ? '#fff' : !canSend ? 'rgba(0,0,0,.35)' : '#161616',
             }}
           >
-            {sending ? 'Sending…' : n === 0 ? 'Select text to send' : `Send to ${pcName}`}
+            {sending
+              ? 'Sending…'
+              : text.trim().length === 0
+                ? 'Select text to send'
+                : sendError
+                  ? 'Try sending again'
+                  : `Send to ${pcName}`}
           </button>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11, color: '#9a9a92' }}>
             <svg width="10" height="12" viewBox="0 0 10 12" style={{ flex: 'none' }} aria-hidden="true">

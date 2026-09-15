@@ -2,11 +2,15 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 const api = { loadKey: vi.fn(), forgetKey: vi.fn(), call: vi.fn() };
-vi.mock('./api.js', () => ({
+vi.mock('./api.js', async (importOriginal) => ({
+  // keep the real error classifiers; only the network-facing calls are stubbed
+  ...(await importOriginal()),
   loadKey: (...a) => api.loadKey(...a),
   forgetKey: (...a) => api.forgetKey(...a),
   call: (...a) => api.call(...a),
 }));
+
+import { CallError } from './api.js';
 
 import MobileApp from './MobileApp.jsx';
 
@@ -213,19 +217,21 @@ describe('MobileApp', () => {
 
   it('shows an error screen when the server is unreachable', async () => {
     api.loadKey.mockReturnValue(KEY);
-    api.call.mockRejectedValueOnce(new Error('down'));
+    api.call.mockRejectedValueOnce(new CallError('unreachable', 'unreachable'));
     render(<MobileApp />);
 
     expect(await screen.findByText(/can’t reach your computer/i)).toBeInTheDocument();
-    expect(screen.getByText(/rescan the qr/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /forget pairing/i }));
+    expect(screen.getByText(/rescanning the qr/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /scan the pairing code again/i }));
     expect(api.forgetKey).toHaveBeenCalled();
     expect(screen.getByText(/scan the qr code it shows/i)).toBeInTheDocument();
   });
 
   it('Try again re-attempts the hello and recovers', async () => {
     api.loadKey.mockReturnValue(KEY);
-    api.call.mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce({ name: 'MY-PC' });
+    api.call
+      .mockRejectedValueOnce(new CallError('unreachable', 'unreachable'))
+      .mockResolvedValueOnce({ name: 'MY-PC' });
     render(<MobileApp />);
 
     await screen.findByText(/can’t reach your computer/i);
@@ -307,6 +313,63 @@ describe('MobileApp', () => {
 
     fireEvent.change(document.querySelector('input[type=file]'), { target: { files: [new File(['x'], 'p.jpg')] } });
     expect(await screen.findByText(/no text found/i)).toBeInTheDocument();
+
+    // the way out is scanning again — not reconnecting to a computer that was fine
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+    const hellos = api.call.mock.calls.filter(([, ep]) => ep === 'hello').length;
+    fireEvent.click(screen.getByRole('button', { name: /scan again/i }));
+    expect(await screen.findByRole('button', { name: /take photo of text/i })).toBeInTheDocument();
+    expect(api.call.mock.calls.filter(([, ep]) => ep === 'hello').length).toBe(hellos);
+
+    globalThis.Image = origImage;
+  });
+
+  it('a pairing rejected by the computer says so, instead of blaming the Wi-Fi', async () => {
+    api.loadKey.mockReturnValue(KEY);
+    api.call.mockRejectedValueOnce(new CallError('rejected', 'server said 400', 400));
+    render(<MobileApp />);
+    expect(await screen.findByText(/no longer recognises this phone/i)).toBeInTheDocument();
+  });
+
+  it('a failed send stays on the review so one more tap retries it', async () => {
+    api.loadKey.mockReturnValue(KEY);
+    let clipCalls = 0;
+    api.call.mockImplementation(async (_key, endpoint) => {
+      if (endpoint === 'ocr') {
+        return { words: [{ t: 'hello', x: 0, y: 0, w: 40, h: 20, li: 0, pi: 0 }] };
+      }
+      if (endpoint === 'clip') {
+        clipCalls++;
+        if (clipCalls === 1) throw new CallError('unreachable', 'unreachable');
+        return { ok: true };
+      }
+      return { name: 'MY-PC' };
+    });
+    render(<MobileApp />);
+    await screen.findByText('MY-PC — linked');
+
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:x');
+    globalThis.URL.revokeObjectURL = vi.fn();
+    const origImage = globalThis.Image;
+    globalThis.Image = class {
+      set src(_v) {
+        this.naturalWidth = 100;
+        this.naturalHeight = 50;
+        setTimeout(() => this.onload());
+      }
+    };
+    HTMLCanvasElement.prototype.toBlob = function (cb) {
+      cb(new Blob(['jpeg'], { type: 'image/jpeg' }));
+    };
+    HTMLCanvasElement.prototype.getContext = () => ({ drawImage: () => {} });
+
+    fireEvent.change(document.querySelector('input[type=file]'), { target: { files: [new File(['x'], 'p.jpg')] } });
+    fireEvent.click(await screen.findByRole('button', { name: /send to MY-PC/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn’t reach your computer/i);
+    fireEvent.click(screen.getByRole('button', { name: /try sending again/i }));
+    expect(await screen.findByText(/On MY-PC’s clipboard/)).toBeInTheDocument();
+    expect(clipCalls).toBe(2);
 
     globalThis.Image = origImage;
   });
