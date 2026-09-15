@@ -4,8 +4,8 @@ import CopyCamDemo from './CopyCamDemo.jsx';
 
 const STEPS = [
   'Pair once — scan the QR on your computer',
-  'Tap the shutter — text is detected live',
-  "Confirm — it's pasted-ready on the PC",
+  'Frame the text and tap — pick the words you want',
+  "Send — it's on your PC's clipboard",
 ];
 
 export default function App({ accentColor = '#CFFF3B', deviceName = 'My MacBook', autoSend = false }) {

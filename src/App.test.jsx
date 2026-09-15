@@ -9,8 +9,8 @@ describe('App', () => {
     expect(screen.getByText('Cam')).toBeInTheDocument();
     expect(screen.getByText(/point your phone at any text/i)).toBeInTheDocument();
     expect(screen.getByText(/pair once — scan the qr/i)).toBeInTheDocument();
-    expect(screen.getByText(/tap the shutter/i)).toBeInTheDocument();
-    expect(screen.getByText(/pasted-ready on the pc/i)).toBeInTheDocument();
+    expect(screen.getByText(/frame the text and tap/i)).toBeInTheDocument();
+    expect(screen.getByText(/on your pc's clipboard/i)).toBeInTheDocument();
   });
 
   it('renders the demo inside the device frame starting on the pair screen', () => {

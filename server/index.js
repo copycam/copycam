@@ -95,7 +95,7 @@ function desktopHtml({ qrSvg, hostname }) {
 <div class="card">
   <div class="logo">Copy<b>Cam</b></div>
   <div class="qr">${qrSvg}</div>
-  <div class="hint">Same Wi&#8209;Fi, no account. Use it in your phone&rsquo;s browser, or in the CopyCam app.</div>
+  <div class="hint">Same Wi&#8209;Fi. Use it in your phone&rsquo;s browser, or in the CopyCam app.</div>
 
   <div class="ways">
     <div class="way">
@@ -110,10 +110,11 @@ function desktopHtml({ qrSvg, hostname }) {
       <h2><span class="tag">APP</span> flash, and faster</h2>
       <ol>
         <li>Install <b>Expo Go</b> from the App Store or Play Store.</li>
+        <li>Sign in to the same Expo account here (<code>npx expo login</code> in <code>mobile/</code>) and in Expo Go.</li>
         <li>On this PC run <code>npm run app</code>, then scan <i>that</i> QR to load CopyCam.</li>
         <li>In the app, scan the code above to pair.</li>
       </ol>
-      <div class="note">The app can switch the camera flash on, which the browser cannot, and remembers the pairing in the phone&rsquo;s secure storage.</div>
+      <div class="note">The app can switch the camera flash on, which the browser cannot, and remembers the pairing in the phone&rsquo;s secure storage. Expo Go needs a free Expo account on both sides.</div>
     </div>
   </div>
 
