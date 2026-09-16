@@ -64,7 +64,7 @@ export function createNonceLedger(windowMs = 2 * MAX_AGE_MS) {
 }
 
 export function createApp({ key, hostname, distDir, allowedHosts, deps }) {
-  const { clipboard, ocr, onEvent = () => {} } = deps;
+  const { clipboard, ocr, wifi, onEvent = () => {} } = deps;
   const nonces = createNonceLedger();
   const hits = new Map(); // per-IP rolling request timestamps for /api
 
@@ -140,11 +140,20 @@ export function createApp({ key, hostname, distDir, allowedHosts, deps }) {
     try {
       // script is a hint from the phone's language picker; ocr() validates it
       const script = typeof msg.script === 'string' ? msg.script.toLowerCase().slice(0, 20) : undefined;
-      const result = await ocr(Buffer.from(fromB64u(msg.img)), script);
-      onEvent({ type: 'scanned', blocks: result.lineCount });
+      const image = Buffer.from(fromB64u(msg.img));
+      // A Wi-Fi QR on the label gives the network and password exactly, with
+      // none of OCR's reading mistakes. It runs alongside the text and must
+      // never cost the scan its words, so its failures are swallowed.
+      const [result, found] = await Promise.all([
+        ocr(image, script),
+        wifi ? wifi(image).catch(() => null) : null,
+      ]);
+      onEvent({ type: 'scanned', blocks: result.lineCount, wifi: Boolean(found) });
       // `rotation` is how far the server had to turn the image to read it; the
       // client turns its copy to match so the highlights stay aligned.
-      res.json(seal(key, { words: result.words, rotation: result.rotation ?? 0 }, 'ocr-ack'));
+      res.json(
+        seal(key, { words: result.words, rotation: result.rotation ?? 0, ...(found ? { wifi: found } : {}) }, 'ocr-ack'),
+      );
     } catch {
       res.status(500).json({ error: 'ocr failed' });
     }

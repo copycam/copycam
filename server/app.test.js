@@ -16,6 +16,7 @@ let base;
 let server;
 let allowedHost;
 const clipboard = vi.fn(async () => {});
+const wifi = vi.fn(async () => null);
 const ocr = vi.fn(async () => ({
   words: [
     { t: 'SSID:', x: 1, y: 2, w: 40, h: 20, li: 0, pi: 0 },
@@ -43,7 +44,7 @@ beforeAll(async () => {
     distDir: null,
     // populated after listen, since the port is ephemeral
     allowedHosts: { has: (h) => h === allowedHost },
-    deps: { clipboard, ocr },
+    deps: { clipboard, ocr, wifi },
   });
   server = app.listen(0, '127.0.0.1');
   await new Promise((r) => server.on('listening', r));
@@ -85,6 +86,26 @@ describe('companion server API', () => {
     expect(ack.words[3]).toMatchObject({ t: 'corgi-battery-42', li: 1 });
     // the turn the server used to read it, so the client can match its photo
     expect(ack.rotation).toBe(90);
+  });
+
+  it('returns a Wi-Fi code found in the photo alongside the text', async () => {
+    wifi.mockResolvedValueOnce({ ssid: 'HOMEBASE_5G', password: 'corgi-battery-42', security: 'WPA', hidden: false });
+    const res = await post('/api/ocr', seal(key, { img: 'AAAA' }, 'ocr'));
+    const ack = open(key, await res.json(), 'ocr-ack');
+    expect(ack.wifi).toEqual({ ssid: 'HOMEBASE_5G', password: 'corgi-battery-42', security: 'WPA', hidden: false });
+    expect(ack.words.length).toBeGreaterThan(0); // the text still comes back too
+  });
+
+  it('omits the field when there is no Wi-Fi code', async () => {
+    const res = await post('/api/ocr', seal(key, { img: 'AAAA' }, 'ocr'));
+    expect(open(key, await res.json(), 'ocr-ack')).not.toHaveProperty('wifi');
+  });
+
+  it('still returns the text when the QR decoder fails', async () => {
+    wifi.mockRejectedValueOnce(new Error('decoder exploded'));
+    const res = await post('/api/ocr', seal(key, { img: 'AAAA' }, 'ocr'));
+    expect(res.status).toBe(200);
+    expect(open(key, await res.json(), 'ocr-ack').words.length).toBeGreaterThan(0);
   });
 
   it('writes the clipboard for a valid clip message', async () => {

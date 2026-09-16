@@ -9,6 +9,7 @@ import clipboard from 'clipboardy';
 import { newKey, toB64u, fromB64u } from '../shared/crypto.js';
 import { createApp, buildAllowedHosts } from './app.js';
 import { recognize, warmup } from './ocr.js';
+import { decodeWifi } from './wifi.js';
 import { loadTlsMaterial } from './tls.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -133,7 +134,7 @@ function desktopHtml({ qrSvg, hostname }) {
     const ev = JSON.parse(e.data);
     const time = new Date().toLocaleTimeString();
     if (ev.type === 'paired') status.textContent = 'Phone linked \\u2713';
-    if (ev.type === 'scanned') log.textContent = time + ' \\u2014 scanned photo, ' + ev.blocks + ' text blocks found';
+    if (ev.type === 'scanned') log.textContent = time + ' \\u2014 scanned photo, ' + ev.blocks + ' text blocks found' + (ev.wifi ? ' + a Wi-Fi code' : '');
     if (ev.type === 'copied') { status.textContent = 'Phone linked \\u2713'; log.textContent = time + ' \\u2014 \\u2713 copied ' + ev.chars + ' chars to clipboard'; }
   };
 </script>`;
@@ -176,10 +177,14 @@ async function main() {
     deps: {
       clipboard: (text) => clipboard.write(text),
       ocr: recognize,
+      wifi: decodeWifi,
       onEvent: (ev) => {
         app.get('broadcast')(ev);
         if (ev.type === 'paired') console.log('✓ Phone linked');
-        if (ev.type === 'scanned') console.log(`  scanned photo — ${ev.blocks} text blocks`);
+        if (ev.type === 'scanned') {
+          // the network name and password themselves are never logged
+          console.log(`  scanned photo — ${ev.blocks} text blocks${ev.wifi ? ' + a Wi-Fi code' : ''}`);
+        }
         if (ev.type === 'copied') console.log(`✓ Copied ${ev.chars} chars to clipboard`);
       },
     },
