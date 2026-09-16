@@ -27,14 +27,19 @@ npm start        # builds the web assets, then starts the companion
 
 1. Frame the text inside the brackets and tap the shutter. Only what's inside the frame is read, and it doesn't matter which way up the phone is — the companion works that out by reading the text.
 2. The photo comes back with the text selectable. **Drag across the words** to pick exactly what you want (a tap selects one word); **All** / **Clear** cover the quick cases.
-3. **Edit** turns the preview into a text field, for fixing a misread character or adding a word. Once edited, your text is what gets sent; **Discard edits** goes back to the selection.
-4. **Send** — it's on your PC's clipboard.
+3. **Check anything marked.** OCR is never perfect, so inside passwords, keys and addresses the preview underlines characters that have a look-alike twin (0 and O, 1 and l, 5 and S) and shows the spaces beside them as faint dots, since one wrongly added space breaks a password. Where the recogniser itself was unsure, the highlight on the photo turns amber and the sheet says so. None of this alters the text — it only shows you where to look.
+4. **Edit** turns the preview into a text field, for fixing a misread character or adding a word. Once edited, your text is what gets sent; **Discard edits** goes back to the selection.
+5. **Send** — it's on your PC's clipboard.
+
+**A Wi-Fi code beats reading the label.** If the photo contains the Wi-Fi QR code most routers print, the review offers the network name and password from the code itself — exact, with no OCR in the path. A photo of nothing but the QR works fine.
 
 Wrapped paragraphs are flowed back into continuous text (a paragraph photographed across several lines pastes as one block, with blank lines between separate paragraphs). Swipe up the bottom sheet for a full preview of exactly what will be sent.
 
 If something fails, the way out matches what went wrong: a lost connection offers **Try again** or rescanning the pairing code; a photo with nothing readable in it offers **Scan again**; a failed send stays on the review — photo, selection and edits intact — so it's one more tap.
 
 ### Languages
+
+Scans use an accurate reader by default and take roughly two seconds. **Latin + CJK — faster** in the script picker swaps in a model about twice as quick that misreads more: measured over 384 rendered lines, 86% of lines exactly right against 57%.
 
 There is no real script *detection*: the default **Latin + CJK** option is a fixed model, not a classifier, so it reads Arabic, Cyrillic and the rest as garbage rather than switching to them. For anything outside English/Spanish/French/German… plus Chinese/Japanese/Korean, tap the script pill on the camera screen and pick the script in your photo — Cyrillic, Greek, Arabic, Devanagari, Korean, Japanese, Thai, Tamil or Telugu. Every model *also* reads Latin letters, so mixed text works: with **Cyrillic** selected, `Network: OFFICE-GUEST / Пароль: Ключ-Река-88` comes through intact. The choice is remembered on the phone, so a whole book only needs picking once. **Hebrew is not supported** by any available model.
 
@@ -64,7 +69,7 @@ OCR is [PaddleOCR](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr) (PP
 CC_OCR_MODEL=cyrillic npm run serve
 ```
 
-Values: `auto` (default, the unified model), `small` / `medium` (larger unified tiers — more accurate, slower), or a script — `latin`, `cyrillic`, `greek`, `arabic`, `devanagari`, `korean`, `japanese`, `thai`, `tamil`, `telugu`. Models download on first use. If PaddleOCR can't load, it falls back to tesseract.js automatically.
+Values: `auto` (default — the unified V6 small model), `fast` (V6 tiny: about twice as quick, misreads more), `medium` (larger still, slower), or a script — `latin`, `cyrillic`, `greek`, `arabic`, `devanagari`, `korean`, `japanese`, `thai`, `tamil`, `telugu`. Models download on first use. If PaddleOCR can't load, it falls back to tesseract.js automatically.
 
 ## Using a real (trusted) certificate
 
@@ -77,6 +82,12 @@ Out of the box CopyCam self-signs, which triggers a one-time warning in the phon
   ```
 
 `CC_DOMAIN` puts the domain in the QR URL and the request allow-list (on both ports, so the native app keeps working) so it matches the certificate. The startup log shows which certificate source is active. The native app doesn't use the certificate at all — see [mobile/README.md](mobile/README.md) for why.
+
+## What it can't read
+
+No OCR is perfect, and these are the limits as measured here rather than assumed. Over 384 rendered lines (4 fonts, 2 sizes, clean and photo-degraded) the default reader gets 86% of lines exactly right. What remains, in order: wrong spacing inside a line; look-alike characters in passwords (`0`/`O`, `1`/`l`, `5`/`S`); and misreads on small, soft serif text.
+
+The companion closes up the spaces a recogniser adds beside an underscore or inside an email address, because written text never has them there — that alone fixed `HOMEBASE _5G`. The rest is what the review's marks, the amber "hard to read" highlight and **Edit** are for. For Wi-Fi specifically, photograph the label's QR code and skip reading altogether.
 
 ## How it's secured
 

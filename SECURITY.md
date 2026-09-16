@@ -15,6 +15,8 @@ CopyCam moves text you photograph — often literally passwords — from your ph
 - **Authentication = key possession.** There are no accounts; a request that doesn't decrypt is rejected with no detail.
 - **Replay protection**: each envelope carries a timestamp and must be within 2 minutes of the server's clock, and each nonce is accepted once — the server remembers it for as long as its message could still pass that freshness check, and only messages that authenticate are recorded, so someone without the key can't flood the list. Each endpoint uses a distinct AAD, so a captured `/api/ocr` payload can't be replayed against `/api/clip`.
 
+**Wi-Fi QR codes are decoded on your PC.** The companion looks for a Wi-Fi QR in the photo it already receives, and returns the network name and password inside the same sealed reply. Decoding is [zxing-wasm](https://github.com/Sec-ant/zxing-wasm), running locally: its WebAssembly binary is loaded from the installed package rather than the CDN the library would otherwise fetch it from, so a scan makes no network request (verified with `fetch` and `XMLHttpRequest` disabled). The credentials are never logged — the terminal and the desktop page say only that a code was found.
+
 **Server hardening** ([server/app.js](server/app.js), [server/index.js](server/index.js)):
 
 - Two listeners: HTTPS on 8787 for the browser app (self-signed, auto-generated, stored in `~/.copycam/tls.json`), and plain HTTP on 8788 for the native app and the desktop page. Both are bound to all interfaces so a phone can reach them.
@@ -66,11 +68,13 @@ Be honest with yourself about these:
 
 ## Dependencies
 
-Checked 2026-09-15.
+Checked 2026-09-16.
 
 **Companion, browser app and landing page** (repo root): `npm audit` is clean. Eight advisories had been published since the previous check — against `qs` (inside the running server, via Express), `adm-zip` (install-time only, see below), and test/build tooling (`undici`, `postcss`, `nanoid`, `vitest`) — all fixed by non-breaking updates.
 
 `onnxruntime-node` (the OCR runtime) pulls in `adm-zip`, which has had decompression-bomb and symlink-following advisories. It has never been reachable here: `adm-zip` only unpacks onnxruntime's own trusted binaries at install time, and the app never feeds user-supplied archives to it (phone photos go straight to the OCR image pipeline). A `package.json` `overrides` entry (`adm-zip: ^0.6.0`) still keeps it on a patched line. Real OCR was re-verified after the most recent update.
+
+`zxing-wasm` (the QR decoder) ships a WebAssembly binary and pulls in two type-only packages. It runs in-process on photos you took, and reaches no network.
 
 **Native app** (`mobile/`): `npm audit` reports 10 moderate findings, which all trace to a single advisory — `uuid`'s missing buffer bounds check when a caller supplies its own buffer (v3/v5/v6) — reached only through Expo's CLI and native-project tooling (`@expo/cli`, `@expo/config`, `xcode`). None of it is in the JavaScript bundle that runs on the phone, and the app never calls `uuid`. npm's suggested "fix" is downgrading to Expo SDK 46, which Expo Go can't run; the real fix is Expo updating its tooling in a later SDK 57 patch.
 
