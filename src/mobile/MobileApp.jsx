@@ -107,6 +107,7 @@ export default function MobileApp() {
   // captured photo {url,width,height} + word geometry for the overlay review
   const [photo, setPhoto] = useState(null);
   const [geo, setGeo] = useState(null);
+  const [wifi, setWifi] = useState(null);
   // { kind: 'connection', message } | { kind: 'scan', title, message }
   const [problem, setProblem] = useState(null);
   const [retrying, setRetrying] = useState(false);
@@ -283,11 +284,13 @@ export default function MobileApp() {
     try {
       const bytes = await blobToBytes(blob);
       const ack = await call(keyRef.current, 'ocr', { img: toB64u(bytes), script });
-      if (!ack.words?.length) {
+      // a photo of just a Wi-Fi QR carries no text, and is still a good scan
+      if (!ack.words?.length && !ack.wifi) {
         setProblem({ kind: 'scan', title: 'No text found', message: COPY.noText });
         setPhase('error');
         return;
       }
+      setWifi(ack.wifi ?? null);
       // The server reads the text to decide which way up it was and reports the
       // turn it used; match it so the highlights land on the words.
       let shown = { blob, width, height };
@@ -300,7 +303,7 @@ export default function MobileApp() {
         }
       }
       setPhoto({ url: URL.createObjectURL(shown.blob), width: shown.width, height: shown.height });
-      setGeo({ words: ack.words });
+      setGeo({ words: ack.words ?? [] });
       setSendError(null);
       setPhase('review');
     } catch (e) {
@@ -371,6 +374,7 @@ export default function MobileApp() {
 
   const rescan = () => {
     clearPhoto();
+    setWifi(null);
     setSendError(null);
     setProblem(null);
     setPhase('idle');
@@ -656,6 +660,7 @@ export default function MobileApp() {
           photo={photo}
           words={geo.words}
           pcName={pcName}
+          wifi={wifi}
           sending={sending}
           sendError={sendError}
           onSend={sendText}

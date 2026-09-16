@@ -324,6 +324,30 @@ describe('MobileApp', () => {
     globalThis.Image = origImage;
   });
 
+  it('a photo of only a Wi-Fi QR still reaches the review', async () => {
+    api.loadKey.mockReturnValue(KEY);
+    api.call.mockImplementation(async (_key, endpoint) => {
+      if (endpoint === 'ocr') return { words: [], wifi: { ssid: 'HOMEBASE_5G', password: 'pw', security: 'WPA', hidden: false } };
+      return { name: 'MY-PC' };
+    });
+    render(<MobileApp />);
+    await screen.findByText('MY-PC — linked');
+
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:x');
+    globalThis.URL.revokeObjectURL = vi.fn();
+    const origImage = globalThis.Image;
+    globalThis.Image = class { set src(_v) { this.naturalWidth = 100; this.naturalHeight = 50; setTimeout(() => this.onload()); } };
+    HTMLCanvasElement.prototype.toBlob = function (cb) { cb(new Blob(['jpeg'], { type: 'image/jpeg' })); };
+    HTMLCanvasElement.prototype.getContext = () => ({ drawImage: () => {} });
+
+    fireEvent.change(document.querySelector('input[type=file]'), { target: { files: [new File(['x'], 'p.jpg')] } });
+    // no text was found, but the code is exact — not an error screen
+    expect(await screen.findByRole('button', { name: /send password/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no text found/i)).not.toBeInTheDocument();
+
+    globalThis.Image = origImage;
+  });
+
   it('a pairing rejected by the computer says so, instead of blaming the Wi-Fi', async () => {
     api.loadKey.mockReturnValue(KEY);
     api.call.mockRejectedValueOnce(new CallError('rejected', 'server said 400', 400));

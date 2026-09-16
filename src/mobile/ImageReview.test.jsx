@@ -141,6 +141,44 @@ describe('ImageReview', () => {
     expect(screen.getByText(/4 words selected/i)).toBeInTheDocument();
   });
 
+  it('marks look-alike characters in codes, and spaces beside them', () => {
+    const WORDS2 = [
+      { t: 'SSID:', x: 0, y: 0, w: 40, h: 20, li: 0, pi: 0 },
+      { t: 'HOMEBASE_5G', x: 50, y: 0, w: 90, h: 20, li: 0, pi: 0 },
+    ];
+    setup({ words: WORDS2 });
+    const preview = screen.getByLabelText('SSID: HOMEBASE_5G');
+    // the risky characters carry a mark; the plain label does not
+    expect(preview.textContent).toBe('SSID:·HOMEBASE_5G');
+    const marked = [...preview.querySelectorAll('span')].filter((el) => el.style.textDecoration.includes('dotted'));
+    expect(marked.map((el) => el.textContent).join('')).toMatch(/[0O5S_]/);
+  });
+
+  it('warns when the recogniser was unsure, and ambers those highlights', () => {
+    const unsure = WORDS.map((w, i) => (i === 0 ? { ...w, c: 0.62 } : { ...w, c: 0.99 }));
+    setup({ words: unsure });
+    expect(screen.getByText(/hard to read/i)).toBeInTheDocument();
+  });
+
+  it('says nothing about doubt when every word read cleanly', () => {
+    setup({ words: WORDS.map((w) => ({ ...w, c: 0.99 })) });
+    expect(screen.queryByText(/hard to read/i)).not.toBeInTheDocument();
+  });
+
+  it('offers a Wi-Fi code exactly, without going through the text', () => {
+    const { onSend } = setup({ wifi: { ssid: 'HOMEBASE_5G', password: 'corgi-battery_42', security: 'WPA', hidden: false } });
+    fireEvent.click(screen.getByRole('button', { name: /send password/i }));
+    expect(onSend).toHaveBeenCalledWith('corgi-battery_42');
+    fireEvent.click(screen.getByRole('button', { name: /send network name/i }));
+    expect(onSend).toHaveBeenLastCalledWith('HOMEBASE_5G');
+  });
+
+  it('offers no password button for an open network', () => {
+    setup({ wifi: { ssid: 'Cafe', password: '', security: 'nopass', hidden: false } });
+    expect(screen.queryByRole('button', { name: /send password/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /send network name/i })).toBeInTheDocument();
+  });
+
   it('shows a failed send inline and offers to send again', () => {
     const { onSend } = setup({ sendError: 'Couldn’t reach your computer.' });
     expect(screen.getByRole('alert')).toHaveTextContent(/couldn’t reach/i);

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { rangeIndices, selectionText } from './selection.js';
+import { annotate, anyDoubtful, isDoubtful } from './annotate.js';
 
 const ACC = '#CFFF3B';
 const COLLAPSED = 216; // bottom-sheet height when not expanded
@@ -18,7 +19,7 @@ const EDGE_Y = 12;
 // The bottom sheet swipes up to preview exactly what will be sent, and the
 // text can be edited before sending — the same behaviour as the native app's
 // review (mobile/src/screens/ReviewScreen.tsx).
-export default function ImageReview({ photo, words, pcName, sending, sendError = null, onSend, onRetake }) {
+export default function ImageReview({ photo, words, wifi = null, pcName, sending, sendError = null, onSend, onRetake }) {
   const containerRef = useRef(null);
   const drag = useRef(null);
   const sheetDrag = useRef(null);
@@ -74,6 +75,7 @@ export default function ImageReview({ photo, words, pcName, sending, sendError =
   // stale text. "Discard edits" is the one way back to the selection.
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
+  const doubtful = useMemo(() => anyDoubtful(indices.map((i) => words[i]).filter(Boolean)), [words, indices]);
   const edited = draft !== null && draft !== selected;
   const text = edited ? draft : selected;
   const canSend = text.trim().length > 0 && !sending;
@@ -98,8 +100,9 @@ export default function ImageReview({ photo, words, pcName, sending, sendError =
     for (const i of indices) {
       const w = words[i];
       const e = byLine.get(w.li);
-      if (!e) byLine.set(w.li, { x0: w.x, x1: w.x + w.w, y: w.y, h: w.h });
+      if (!e) byLine.set(w.li, { x0: w.x, x1: w.x + w.w, y: w.y, h: w.h, doubt: isDoubtful(w) });
       else {
+        e.doubt = e.doubt || isDoubtful(w);
         e.x0 = Math.min(e.x0, w.x);
         e.x1 = Math.max(e.x1, w.x + w.w);
         e.y = Math.min(e.y, w.y);
@@ -170,6 +173,25 @@ export default function ImageReview({ photo, words, pcName, sending, sendError =
       if (!moved) return h > COLLAPSED + 10 ? COLLAPSED : expandedH; // tap toggles
       return h > (COLLAPSED + expandedH) / 2 ? expandedH : COLLAPSED;
     });
+  };
+
+  const riskyStyle = {
+    textDecoration: 'underline dotted',
+    textDecorationColor: '#c08a00',
+    textUnderlineOffset: 3,
+    background: 'rgba(207,255,59,.28)',
+    borderRadius: 3,
+  };
+
+  const wifiCard = {
+    margin: '0 14px 10px',
+    padding: '10px 12px',
+    borderRadius: 12,
+    background: '#fff',
+    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.06)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
   };
 
   const chip = {
@@ -272,7 +294,8 @@ export default function ImageReview({ photo, words, pcName, sending, sendError =
                   width: (b.x1 - b.x0) * map.scale + padX * 2,
                   height: barH,
                   borderRadius: px(0.22, 2, 5),
-                  background: 'color-mix(in srgb, ' + ACC + ' 40%, transparent)',
+                  // amber where the recogniser was unsure of the words on this line
+                  background: b.doubt ? 'rgba(255,193,7,.36)' : 'color-mix(in srgb, ' + ACC + ' 40%, transparent)',
                   boxShadow: `0 0 0 ${ring}px ${ACC}`,
                   pointerEvents: 'none',
                 }}
@@ -352,6 +375,32 @@ export default function ImageReview({ photo, words, pcName, sending, sendError =
           </div>
         </div>
 
+        {wifi && !editing && (
+          <div style={wifiCard}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: 13.5 }}>Wi-Fi code</strong>
+              <span style={{ fontSize: 12, color: '#55554f' }}>read exactly, not guessed</span>
+            </div>
+            <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 13, wordBreak: 'break-all' }}>{wifi.ssid}</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={() => !sending && onSend(wifi.ssid)} style={chip}>
+                Send network name
+              </button>
+              {wifi.password && (
+                <button onClick={() => !sending && onSend(wifi.password)} style={{ ...chip, background: ACC }}>
+                  Send password
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {doubtful && !editing && (
+          <div style={{ margin: '0 14px 8px', fontSize: 12, color: '#8a6d00' }}>
+            Some of this was hard to read — check the underlined characters.
+          </div>
+        )}
+
         {editing ? (
           <textarea
             // dir="auto": a right-to-left result (e.g. Arabic) must read and
@@ -374,11 +423,25 @@ export default function ImageReview({ photo, words, pcName, sending, sendError =
             dir="auto"
             onClick={text ? startEditing : undefined}
             style={previewBox}
+            // the marks are decoration; a screen reader should hear the text
+            aria-label={text}
           >
             {text.length === 0 ? (
               <span style={{ color: '#b0afa8' }}>Drag across the photo to select text, or tap Edit to type it yourself.</span>
             ) : (
-              text
+              annotate(text).map((seg, i) =>
+                seg.mark === 'risky' ? (
+                  <span key={i} style={riskyStyle}>
+                    {seg.t}
+                  </span>
+                ) : seg.mark === 'space' ? (
+                  <span key={i} style={{ color: '#c9c8c1' }} aria-hidden="true">
+                    {'·'.repeat(seg.t.length)}
+                  </span>
+                ) : (
+                  <span key={i}>{seg.t}</span>
+                ),
+              )
             )}
           </div>
         )}
