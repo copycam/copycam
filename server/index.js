@@ -183,7 +183,9 @@ async function main() {
         if (ev.type === 'paired') console.log('✓ Phone linked');
         if (ev.type === 'scanned') {
           // the network name and password themselves are never logged
-          console.log(`  scanned photo — ${ev.blocks} text blocks${ev.wifi ? ' + a Wi-Fi code' : ''}`);
+          console.log(
+            `  scanned photo — ${ev.blocks} text blocks${ev.wifi ? ' + a Wi-Fi code' : ''}, read in ${(ev.ms / 1000).toFixed(1)} s`,
+          );
         }
         if (ev.type === 'copied') console.log(`✓ Copied ${ev.chars} chars to clipboard`);
       },

@@ -144,11 +144,13 @@ export function createApp({ key, hostname, distDir, allowedHosts, deps }) {
       // A Wi-Fi QR on the label gives the network and password exactly, with
       // none of OCR's reading mistakes. It runs alongside the text and must
       // never cost the scan its words, so its failures are swallowed.
+      const started = Date.now();
       const [result, found] = await Promise.all([
         ocr(image, script),
         wifi ? wifi(image).catch(() => null) : null,
       ]);
-      onEvent({ type: 'scanned', blocks: result.lineCount, wifi: Boolean(found) });
+      // how long reading took, so a slow scan can be told apart from a slow network
+      onEvent({ type: 'scanned', blocks: result.lineCount, wifi: Boolean(found), ms: Date.now() - started });
       // `rotation` is how far the server had to turn the image to read it; the
       // client turns its copy to match so the highlights stay aligned.
       res.json(
