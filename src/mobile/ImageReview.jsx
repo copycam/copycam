@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { rangeIndices, selectionText } from './selection.js';
-import { annotate, anyDoubtful, isDoubtful } from './annotate.js';
+import { rangeIndices, selectionBars, selectionText, wordAt } from './selection.js';
+import { IDENTITY, clampView, pinch, toLayer, toggleZoom } from './view.js';
+import { annotate, anyDoubtful } from './annotate.js';
 
 const ACC = '#CFFF3B';
 const COLLAPSED = 216; // bottom-sheet height when not expanded
@@ -15,7 +16,9 @@ const EDGE_Y = 12;
 
 // Google-Translate-style scan review: the captured photo with a native
 // text-selection feel. Drag across the words to select a contiguous run
-// (a tap selects one word); the selection highlights as merged per-line bars.
+// (a tap selects one word); the selection highlights as one bar per line, along
+// the line's slant. Two fingers zoom and pan the photo; a double tap zooms in
+// or back out.
 // The bottom sheet swipes up to preview exactly what will be sent, and the
 // text can be edited before sending — the same behaviour as the native app's
 // review (mobile/src/screens/ReviewScreen.tsx).
@@ -25,7 +28,7 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
   const sheetDrag = useRef(null);
   // selection is one contiguous range [anchor..focus]; default = everything
   const [sel, setSel] = useState(() => (words.length ? { anchor: 0, focus: words.length - 1 } : null));
-  const [map, setMap] = useState({ scale: 0, offX: 0, offY: 0 });
+  const [map, setMap] = useState({ scale: 0, offX: 0, offY: 0, cw: 0, ch: 0 });
   const [sheetH, setSheetH] = useState(COLLAPSED);
   const [dragging, setDragging] = useState(false);
 
@@ -49,7 +52,7 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
       const availW = Math.max(1, cw - EDGE_X * 2);
       const availH = Math.max(1, ch - EDGE_Y * 2);
       const scale = Math.min(availW / photo.width, availH / photo.height);
-      setMap({ scale, offX: (cw - photo.width * scale) / 2, offY: (ch - photo.height * scale) / 2 });
+      setMap({ scale, offX: (cw - photo.width * scale) / 2, offY: (ch - photo.height * scale) / 2, cw, ch });
     };
     measure();
     window.addEventListener('resize', measure);
@@ -94,62 +97,110 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
   // pointer capture it takes swallows their click
   const noDrag = (e) => e.stopPropagation();
 
-  // one merged highlight bar per line covering its selected span
-  const bars = useMemo(() => {
-    const byLine = new Map();
-    for (const i of indices) {
-      const w = words[i];
-      const e = byLine.get(w.li);
-      if (!e) byLine.set(w.li, { x0: w.x, x1: w.x + w.w, y: w.y, h: w.h, doubt: isDoubtful(w) });
-      else {
-        e.doubt = e.doubt || isDoubtful(w);
-        e.x0 = Math.min(e.x0, w.x);
-        e.x1 = Math.max(e.x1, w.x + w.w);
-        e.y = Math.min(e.y, w.y);
-        e.h = Math.max(e.h, w.h);
-      }
-    }
-    return [...byLine.values()];
-  }, [words, indices]);
+  const bars = useMemo(() => selectionBars(words, indices), [words, indices]);
 
-  // find the word nearest a screen point, weighting the vertical axis so a
-  // drag snaps to the row under the finger (like sweeping a text cursor)
-  const wordAt = (clientX, clientY) => {
-    const el = containerRef.current;
-    if (!el || !map.scale) return null;
-    const rect = el.getBoundingClientRect();
-    const ix = (clientX - rect.left - map.offX) / map.scale;
-    const iy = (clientY - rect.top - map.offY) / map.scale;
-    let best = null;
-    let bestD = Infinity;
-    for (let i = 0; i < words.length; i++) {
-      const w = words[i];
-      if (ix >= w.x && ix <= w.x + w.w && iy >= w.y && iy <= w.y + w.h) return i;
-      const dx = Math.abs(ix - (w.x + w.w / 2));
-      const dy = Math.abs(iy - (w.y + w.h / 2));
-      const d = dy * 3 + dx;
-      if (d < bestD) {
-        bestD = d;
-        best = i;
-      }
-    }
-    return best;
+  // Zoom (the math is in view.js). The transform is written straight to the
+  // layer while fingers move, so a pinch doesn't re-render the page; `zoom` —
+  // what the highlights are sized for — is committed once a gesture ends.
+  const layerRef = useRef(null);
+  const viewRef = useRef(IDENTITY);
+  const [zoom, setZoom] = useState(1);
+  const photoRect = { x: map.offX, y: map.offY, w: photo.width * map.scale, h: photo.height * map.scale };
+  const area = { width: map.cw, height: map.ch };
+  const margin = { x: EDGE_X, y: EDGE_Y };
+  const showView = (v, animate = false) => {
+    viewRef.current = v;
+    const el = layerRef.current;
+    if (!el) return;
+    el.style.transition = animate ? 'transform .24s cubic-bezier(.2,.8,.2,1)' : 'none';
+    el.style.transform = `translate(${v.tx}px, ${v.ty}px) scale(${v.z})`;
+  };
+  // a new layout (rotation, resize) starts unzoomed
+  useEffect(() => {
+    showView(IDENTITY);
+    setZoom(1);
+  }, [map.scale, map.cw, map.ch]);
+
+  // a point in the review area -> the word under it, through the zoom
+  const wordAtPoint = (x, y) => {
+    if (!map.scale) return null;
+    const [lx, ly] = toLayer(viewRef.current, x, y);
+    return wordAt(words, (lx - map.offX) / map.scale, (ly - map.offY) / map.scale);
+  };
+
+  const pointers = useRef(new Map());
+  const gesture = useRef(null);
+  const lastTap = useRef(null);
+  const local = (e) => {
+    const r = containerRef.current.getBoundingClientRect();
+    return [e.clientX - r.left, e.clientY - r.top];
+  };
+  const fingers = () => {
+    const [a, b] = [...pointers.current.values()];
+    return { mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], dist: Math.hypot(a[0] - b[0], a[1] - b[1]) };
   };
 
   const onDown = (e) => {
-    const idx = wordAt(e.clientX, e.clientY);
-    if (idx == null) return;
-    drag.current = idx;
-    setSel({ anchor: idx, focus: idx });
     e.currentTarget.setPointerCapture?.(e.pointerId);
+    const [x, y] = local(e);
+    pointers.current.set(e.pointerId, [x, y]);
+    if (pointers.current.size === 1) {
+      gesture.current = { mode: 'select', before: sel, moved: false, x, y, at: Date.now() };
+      const idx = wordAtPoint(x, y);
+      if (idx == null) return;
+      drag.current = idx;
+      setSel({ anchor: idx, focus: idx });
+      return;
+    }
+    const g = gesture.current;
+    if (pointers.current.size === 2 && g && g.mode !== 'pinch') {
+      // the second finger arrived: this was never a selection
+      drag.current = null;
+      setSel(g.before);
+      g.mode = 'pinch';
+      g.pinch = { view: viewRef.current, ...fingers() };
+    }
   };
   const onMove = (e) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    const [x, y] = local(e);
+    pointers.current.set(e.pointerId, [x, y]);
+    const g = gesture.current;
+    if (!g) return;
+    if (g.mode === 'pinch') {
+      if (pointers.current.size < 2) return; // one finger left over: wait for it to lift
+      const f = fingers();
+      showView(clampView(pinch(g.pinch.view, g.pinch.mid, g.pinch.dist, f.mid, f.dist), photoRect, area, margin));
+      return;
+    }
+    if (Math.abs(x - g.x) + Math.abs(y - g.y) > 10) g.moved = true;
     if (drag.current == null) return;
-    const idx = wordAt(e.clientX, e.clientY);
+    const idx = wordAtPoint(x, y);
     if (idx != null) setSel({ anchor: drag.current, focus: idx });
   };
-  const onUp = () => {
+  const onUp = (e) => {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size) return;
+    const g = gesture.current;
+    gesture.current = null;
     drag.current = null;
+    if (!g) return;
+    if (g.mode === 'pinch') {
+      setZoom(viewRef.current.z);
+      return;
+    }
+    if (g.moved || Date.now() - g.at > 300) return;
+    const prev = lastTap.current;
+    if (prev && g.at - prev.at < 350 && Math.hypot(g.x - prev.x, g.y - prev.y) < 40) {
+      // a double tap zooms; the word its first tap selected is put back
+      lastTap.current = null;
+      setSel(prev.before);
+      const v = toggleZoom(viewRef.current, g.x, g.y, photoRect, area, margin);
+      showView(v, true);
+      setZoom(v.z);
+      return;
+    }
+    lastTap.current = { at: g.at, x: g.x, y: g.y, before: g.before };
   };
 
   // draggable bottom sheet
@@ -247,61 +298,60 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
         onPointerCancel={onUp}
         style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: COLLAPSED, touchAction: 'none', overflow: 'hidden' }}
       >
-        <img
-          src={photo.url}
-          alt="scanned"
-          draggable={false}
-          style={{
-            position: 'absolute',
-            left: map.offX,
-            top: map.offY,
-            width: photo.width * map.scale,
-            height: photo.height * map.scale,
-            userSelect: 'none',
-            filter: 'brightness(.62)',
-            // makes the inset read as a deliberate frame, not a stray gap
-            borderRadius: 10,
-          }}
-        />
-        {map.scale > 0 &&
-          bars.map((b, i) => {
-            // Sit *inside* the OCR line box rather than padding past it: line
-            // boxes include leading, so a bar that overhangs collides with the
-            // next line on tightly-set text.
-            //
-            // Every dimension scales with the line's *rendered* height, not the
-            // source pixels — the same page renders ~3.5x smaller in landscape
-            // (the sheet leaves a short review area), where a fixed 1px ring
-            // and 3px side padding swelled to nearly the whole line. Clamps
-            // keep it sane at both extremes.
-            const lineH = b.h * map.scale;
-            const px = (frac, lo, hi) => Math.max(lo, Math.min(hi, lineH * frac));
-            const padX = px(0.16, 0.5, 3);
-            const ring = px(0.07, 0.4, 1.25);
-            // Guarantee a visible gap between stacked bars. Taking 78% of the
-            // line is fine when it renders large, but on a small render (a
-            // landscape review area is ~3.5x shorter) that left barely 1px
-            // between neighbours and the highlights read as one solid slab.
-            const minGap = px(0.2, 2.5, 7);
-            const barH = Math.max(3, Math.min(lineH * 0.78, lineH - minGap - ring * 2));
-            return (
-              <div
-                key={i}
-                style={{
-                  position: 'absolute',
-                  left: map.offX + b.x0 * map.scale - padX,
-                  top: map.offY + (b.y + b.h / 2) * map.scale - barH / 2,
-                  width: (b.x1 - b.x0) * map.scale + padX * 2,
-                  height: barH,
-                  borderRadius: px(0.22, 2, 5),
-                  // amber where the recogniser was unsure of the words on this line
-                  background: b.doubt ? 'rgba(255,193,7,.36)' : 'color-mix(in srgb, ' + ACC + ' 40%, transparent)',
-                  boxShadow: `0 0 0 ${ring}px ${ACC}`,
-                  pointerEvents: 'none',
-                }}
-              />
-            );
-          })}
+        <div ref={layerRef} style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', willChange: 'transform' }}>
+          <img
+            src={photo.url}
+            alt="scanned"
+            draggable={false}
+            style={{
+              position: 'absolute',
+              left: map.offX,
+              top: map.offY,
+              width: photo.width * map.scale,
+              height: photo.height * map.scale,
+              userSelect: 'none',
+              filter: 'brightness(.62)',
+              // makes the inset read as a deliberate frame, not a stray gap
+              borderRadius: 10,
+            }}
+          />
+          {map.scale > 0 &&
+            bars.map((b, i) => {
+              // Sized on screen, then divided by the zoom they're drawn under,
+              // so a highlight keeps the same ring and margin at any zoom — and
+              // stays proportional however small the photo renders (the same
+              // page renders ~3.5x smaller in landscape, where fixed sizes
+              // swelled to cover the whole line).
+              const s = map.scale;
+              const lineH = b.h * s * zoom;
+              const px = (frac, lo, hi) => Math.max(lo, Math.min(hi, lineH * frac)) / zoom;
+              const padX = px(0.2, 1.5, 5);
+              const padY = px(0.08, 0.75, 2.5);
+              const len = Math.hypot(b.x1 - b.x0, b.y1 - b.y0) * s + padX * 2;
+              const barH = b.h * s + padY * 2;
+              const cx = map.offX + ((b.x0 + b.x1) / 2) * s;
+              const cy = map.offY + ((b.y0 + b.y1) / 2) * s;
+              return (
+                <div
+                  key={i}
+                  style={{
+                    position: 'absolute',
+                    left: cx - len / 2,
+                    top: cy - barH / 2,
+                    width: len,
+                    height: barH,
+                    // along the line's own slant
+                    transform: `rotate(${Math.atan2(b.y1 - b.y0, b.x1 - b.x0)}rad)`,
+                    borderRadius: px(0.25, 2, 6),
+                    // amber where the recogniser was unsure of a word in it
+                    background: b.doubt ? 'rgba(255,193,7,.36)' : 'color-mix(in srgb, ' + ACC + ' 40%, transparent)',
+                    boxShadow: `0 0 0 ${px(0.06, 0.5, 1.25)}px ${ACC}`,
+                    pointerEvents: 'none',
+                  }}
+                />
+              );
+            })}
+        </div>
       </div>
 
       {/* top bar */}
@@ -310,6 +360,18 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
           ← Retake
         </button>
         <div style={{ display: 'flex', gap: 8 }}>
+          {zoom > 1.05 && (
+            <button
+              onClick={() => {
+                showView(IDENTITY, true);
+                setZoom(1);
+              }}
+              style={pill}
+              aria-label="Zoom out to the whole photo"
+            >
+              Fit
+            </button>
+          )}
           <button onClick={() => setSel({ anchor: 0, focus: words.length - 1 })} style={pill}>
             All
           </button>
@@ -427,7 +489,7 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
             aria-label={text}
           >
             {text.length === 0 ? (
-              <span style={{ color: '#b0afa8' }}>Drag across the photo to select text, or tap Edit to type it yourself.</span>
+              <span style={{ color: '#b0afa8' }}>Drag across the photo to select text (pinch to zoom in), or tap Edit to type it yourself.</span>
             ) : (
               annotate(text).map((seg, i) =>
                 seg.mark === 'risky' ? (
