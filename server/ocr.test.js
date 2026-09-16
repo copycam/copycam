@@ -7,6 +7,8 @@ import {
   lineIsRtl,
   orientationScore,
   isConfident,
+  tidyLine,
+  resolveScript,
 } from './ocr.js';
 
 // A line of writing is wide and short; a quarter-turned page yields tall,
@@ -72,6 +74,50 @@ describe('script selection', () => {
 
 const line = (y, h = 30, t = 'x') => ({ t, x: 10, y, w: 100, h });
 
+describe('tidyLine', () => {
+  it('removes the space the recogniser puts beside an underscore', () => {
+    expect(tidyLine('guest_ wifi_2024')).toBe('guest_wifi_2024');
+    expect(tidyLine('SSID: HOMEBASE _5G')).toBe('SSID: HOMEBASE_5G');
+    expect(tidyLine('my_secret_key_ 77')).toBe('my_secret_key_77');
+  });
+
+  it('closes up an email address split around its @', () => {
+    expect(tidyLine('john.doe @ example.com')).toBe('john.doe@example.com');
+    expect(tidyLine('john.doe@ example.com')).toBe('john.doe@example.com');
+  });
+
+  it('leaves ordinary prose and its spaces alone', () => {
+    // the rules must never glue real words together — including single letters,
+    // the case most at risk
+    expect(tidyLine('The quick brown fox jumps over')).toBe('The quick brown fox jumps over');
+    expect(tidyLine('a b c 1 2 3')).toBe('a b c 1 2 3');
+    expect(tidyLine('Model No. 4421 Rev B')).toBe('Model No. 4421 Rev B');
+    expect(tidyLine('Meet me @ 5 today')).toBe('Meet me @ 5 today');
+  });
+
+  it('trims and collapses whitespace', () => {
+    expect(tidyLine('  spaced   out  ')).toBe('spaced out');
+  });
+});
+
+describe('resolveScript', () => {
+  it('keeps a known script', () => {
+    expect(resolveScript('cyrillic')).toBe('cyrillic');
+    expect(resolveScript('fast')).toBe('fast');
+  });
+
+  it('maps the retired "small" id onto the default, which is now that model', () => {
+    // phones may still have it stored from when it was a separate choice;
+    // resolving it avoids loading the same model twice under two names
+    expect(resolveScript('small')).toBe('auto');
+  });
+
+  it('falls back to the default for anything unknown', () => {
+    expect(resolveScript('klingon')).toBe('auto');
+    expect(resolveScript(undefined)).toBe('auto');
+  });
+});
+
 describe('linesToParas', () => {
   it('groups tightly-spaced wrapped lines into one paragraph', () => {
     const lines = [line(0), line(36), line(72)];
@@ -116,6 +162,21 @@ describe('splitWords', () => {
     const words = splitWords(lines, [[0], [1]]);
     expect(words.map((w) => w.pi)).toEqual([0, 1]);
     expect(words.map((w) => w.li)).toEqual([0, 1]);
+  });
+});
+
+describe('word confidence', () => {
+  const withConf = (c) => [{ t: 'hard to read', x: 0, y: 0, w: 120, h: 20, c }];
+
+  it('carries the line’s confidence onto every word it produced', () => {
+    const words = splitWords(withConf(0.8123), [[0]]);
+    expect(words).toHaveLength(3);
+    for (const w of words) expect(w.c).toBe(0.81); // rounded: the wire stays small
+  });
+
+  it('omits it entirely when the recogniser gave none', () => {
+    const [word] = splitWords([{ t: 'x', x: 0, y: 0, w: 10, h: 10 }], [[0]]);
+    expect(word).not.toHaveProperty('c');
   });
 });
 

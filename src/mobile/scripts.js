@@ -10,7 +10,7 @@
 // is picked. The choice is remembered, so a book only needs picking once.
 export const SCRIPTS = [
   { id: 'auto', label: 'Latin + CJK', hint: 'English, Spanish, French… plus Chinese, Japanese, Korean. Not Arabic, Hebrew, Cyrillic, or other scripts — pick those below.' },
-  { id: 'small', label: 'Latin + CJK — more accurate', hint: 'same coverage as above, slower' },
+  { id: 'fast', label: 'Latin + CJK — faster', hint: 'same coverage, about twice as quick, misreads more' },
   { id: 'cyrillic', label: 'Cyrillic', hint: 'Русский, Українська, Български + Latin' },
   { id: 'greek', label: 'Greek', hint: 'Ελληνικά + Latin' },
   { id: 'arabic', label: 'Arabic', hint: 'العربية, فارسی, اردو + Latin' },

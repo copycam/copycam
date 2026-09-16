@@ -118,7 +118,8 @@ export default function MobileApp() {
   const [torchOn, setTorchOn] = useState(false);
   const [script, setScript] = useState(() => {
     try {
-      return localStorage.getItem(SCRIPT_STORAGE) || 'auto';
+      const stored = localStorage.getItem(SCRIPT_STORAGE);
+      return SCRIPTS.some((s) => s.id === stored) ? stored : 'auto';
     } catch {
       return 'auto';
     }

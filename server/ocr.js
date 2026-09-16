@@ -3,6 +3,7 @@ import os from 'node:os';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import {
   PaddleOcrService,
+  V6_TINY_MODEL,
   V6_SMALL_MODEL,
   V6_MEDIUM_MODEL,
   V5_CYRILLIC_MOBILE_MODEL,
@@ -28,9 +29,16 @@ import {
 // the first use. CC_OCR_MODEL sets the default; the phone can override it
 // per scan.
 
+// 'auto' is the unified Latin + CJK reader and the default. It used to be the
+// V6 tiny model; measured over 384 rendered lines (4 fonts, 2 sizes, clean and
+// photo-degraded), tiny read 57% of lines exactly and small 86%, and tiny lost
+// 15 underscores outright (HOMEBASE_5G -> "HOMEBASE 5G") where small lost none.
+// Small costs roughly twice the time (~2s vs ~1s on a phone-sized crop), which
+// is why tiny stays available as 'fast'.
 const SCRIPT_MODELS = {
-  auto: undefined, // V6 unified -- Latin scripts + Chinese/Japanese/Korean
-  small: V6_SMALL_MODEL, // same coverage, more accurate, slower
+  auto: V6_SMALL_MODEL, // V6 unified -- Latin scripts + Chinese/Japanese/Korean
+  fast: V6_TINY_MODEL, // same coverage, about twice as quick, misreads more
+  small: V6_SMALL_MODEL, // the old name for what 'auto' now is; still accepted
   medium: V6_MEDIUM_MODEL,
   latin: V5_LATIN_MOBILE_MODEL,
   cyrillic: V5_CYRILLIC_MOBILE_MODEL, // Russian, Ukrainian, Bulgarian, Serbian...
@@ -47,14 +55,37 @@ const SCRIPT_MODELS = {
 export const SCRIPTS = Object.keys(SCRIPT_MODELS);
 export const DEFAULT_SCRIPT = (process.env.CC_OCR_MODEL || 'auto').toLowerCase();
 
+// The model actually used for a requested script: anything unknown falls back
+// to the default rather than failing a scan, and 'small' — which phones may
+// still have stored from when it was a separate choice — resolves to 'auto' so
+// the same model isn't loaded into memory twice under two names.
+export function resolveScript(script) {
+  if (script === 'small') return 'auto';
+  return SCRIPT_MODELS[script] ? script : 'auto';
+}
+
+// Whitespace the recogniser adds where written text never has it. Measured on
+// the same 384 lines: these lifted exact lines from 57% to 59% (tiny) and 85%
+// to 86% (small), and never turned a correct line into a wrong one.
+export function tidyLine(text) {
+  return text
+    .replace(/\s+/g, ' ')
+    .trim()
+    // an underscore joins what it sits between; the recogniser often reads a
+    // space beside it ("guest_ wifi_2024", "HOMEBASE _5G")
+    .replace(/ ?_ ?/g, '_')
+    // an email address has no space around its @ ("john.doe @ example.com")
+    .replace(/(\S) ?@ ?(?=[\w-]+\.[\w.-]+)/g, '$1@');
+}
+
 const paddleByScript = new Map();
 let tesseractPromise = null;
 
 function getPaddle(script) {
-  const key = SCRIPT_MODELS[script] === undefined && script !== 'auto' ? 'auto' : script;
+  const key = resolveScript(script);
   if (!paddleByScript.has(key)) {
     const model = SCRIPT_MODELS[key];
-    const svc = new PaddleOcrService(model ? { model } : undefined);
+    const svc = new PaddleOcrService({ model });
     paddleByScript.set(
       key,
       svc.initialize().then(() => svc),
@@ -163,6 +194,10 @@ export function lineIsRtl(text) {
 // order matches reading order even though on-screen position runs the other
 // way. Selection (rangeIndices/selectionText) already walks words purely by
 // array index, so this alone makes drag-selecting and pasting RTL text work.
+// Two decimals is plenty for "was this hard to read", and keeps the sealed
+// payload small on a page full of words.
+const conf = (line) => (typeof line.c === 'number' ? { c: Math.round(line.c * 100) / 100 } : {});
+
 export function splitWords(lines, paras) {
   const linePi = [];
   paras.forEach((p, pi) => p.forEach((li) => (linePi[li] = pi)));
@@ -172,7 +207,7 @@ export function splitWords(lines, paras) {
     const rtl = lineIsRtl(line.t);
     const parts = line.t.split(/\s+/).filter(Boolean);
     if (parts.length <= 1) {
-      words.push({ t: fixRtlToken(line.t), x: line.x, y: line.y, w: line.w, h: line.h, li, pi });
+      words.push({ t: fixRtlToken(line.t), x: line.x, y: line.y, w: line.w, h: line.h, li, pi, ...conf(line) });
       return;
     }
     // total layout units = word characters + single-space gaps between words
@@ -182,7 +217,7 @@ export function splitWords(lines, paras) {
     const lineWords = [];
     for (const p of parts) {
       const wpx = p.length * perUnit;
-      lineWords.push({ t: fixRtlToken(p), x: Math.round(cx), y: line.y, w: Math.round(wpx), h: line.h, li, pi });
+      lineWords.push({ t: fixRtlToken(p), x: Math.round(cx), y: line.y, w: Math.round(wpx), h: line.h, li, pi, ...conf(line) });
       cx += wpx + perUnit; // advance past the word and one space (screen-position order)
     }
     words.push(...(rtl ? lineWords.reverse() : lineWords));
@@ -265,7 +300,13 @@ async function recognizePaddle(imageBuffer, script) {
   // Each result line is an array of recognized words; merge into one line item.
   const lines = result.lines
     .filter((wordsOnLine) => wordsOnLine.length)
-    .map((wordsOnLine) => ({ t: wordsOnLine.map((w) => w.text).join(' ').trim(), ...unionBox(wordsOnLine) }))
+    .map((wordsOnLine) => ({
+      t: tidyLine(wordsOnLine.map((w) => w.text).join(' ')),
+      // the recogniser's own certainty about this line, carried through to the
+      // phone so the review can point at what was hard to read
+      c: Math.min(...wordsOnLine.map((w) => w.confidence ?? 1)),
+      ...unionBox(wordsOnLine),
+    }))
     .filter((l) => l.t)
     .slice(0, 60);
   return { ...pack(lines), lines, confidence: result.confidence ?? 1 };
@@ -283,7 +324,16 @@ async function recognizeTesseract(imageBuffer) {
     for (const para of block.paragraphs || []) {
       for (const line of para.lines || []) {
         const t = (line.text || '').trim();
-        if (t) lines.push({ t, x: line.bbox.x0, y: line.bbox.y0, w: line.bbox.x1 - line.bbox.x0, h: line.bbox.y1 - line.bbox.y0 });
+        if (t) {
+          lines.push({
+            t: tidyLine(t),
+            c: (line.confidence ?? 100) / 100,
+            x: line.bbox.x0,
+            y: line.bbox.y0,
+            w: line.bbox.x1 - line.bbox.x0,
+            h: line.bbox.y1 - line.bbox.y0,
+          });
+        }
       }
     }
   }
@@ -299,7 +349,7 @@ async function recognizeTesseract(imageBuffer) {
 // `script` picks the recognition model (see SCRIPT_MODELS); unknown values
 // fall back to the unified model rather than failing the scan.
 export async function recognize(imageBuffer, script = DEFAULT_SCRIPT) {
-  const key = SCRIPT_MODELS[script] !== undefined || script === 'auto' ? script : 'auto';
+  const key = resolveScript(script);
   try {
     // Upright first: the overwhelmingly common case, and it costs one pass.
     let best = { ...(await recognizePaddle(imageBuffer, key)), rotation: 0 };
