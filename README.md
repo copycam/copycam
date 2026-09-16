@@ -26,7 +26,7 @@ npm start        # builds the web assets, then starts the companion
 ### Scanning
 
 1. Frame the text inside the brackets and tap the shutter. Only what's inside the frame is read, and it doesn't matter which way up the phone is — the companion works that out by reading the text.
-2. The photo comes back with the text selectable. **Drag across the words** to pick exactly what you want (a tap selects one word); **All** / **Clear** cover the quick cases.
+2. The photo comes back with the text selectable. **Drag across the words** to pick exactly what you want (a tap selects one word); **All** / **Clear** cover the quick cases. Small text, such as a sideways shot turned upright, **pinches to zoom**: two fingers zoom and pan, a double tap zooms in or back out, and **Fit** returns to the whole photo. One finger always selects.
 3. **Check anything marked.** OCR is never perfect, so inside passwords, keys and addresses the preview underlines characters that have a look-alike twin (0 and O, 1 and l, 5 and S) and shows the spaces beside them as faint dots, since one wrongly added space breaks a password. Where the recogniser itself was unsure, the highlight on the photo turns amber and the sheet says so. None of this alters the text — it only shows you where to look.
 4. **Edit** turns the preview into a text field, for fixing a misread character or adding a word. Once edited, your text is what gets sent; **Discard edits** goes back to the selection.
 5. **Send** — it's on your PC's clipboard.
@@ -86,6 +86,8 @@ Out of the box CopyCam self-signs, which triggers a one-time warning in the phon
 ## What it can't read
 
 No OCR is perfect, and these are the limits as measured here rather than assumed. Over 384 rendered lines (4 fonts, 2 sizes, clean and photo-degraded) the default reader gets 86% of lines exactly right. What remains, in order: wrong spacing inside a line; look-alike characters in passwords (`0`/`O`, `1`/`l`, `5`/`S`); and misreads on small, soft serif text.
+
+Where each word sits is measured from the photo, not guessed. The reader reports padded boxes around whole lines, and splitting those by letter count put a highlight's edge almost a full letter-height off — a tap near the end of a word picked its neighbour about a third of the time. The companion now finds the gaps between words in the ink, following the line's slant, and a tap near either end of a word lands on it about 99% of the time on the same test crops.
 
 The companion closes up the spaces a recogniser adds beside an underscore or inside an email address, because written text never has them there — that alone fixed `HOMEBASE _5G`. The rest is what the review's marks, the amber "hard to read" highlight and **Edit** are for. For Wi-Fi specifically, photograph the label's QR code and skip reading altogether.
 
