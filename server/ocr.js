@@ -1,6 +1,7 @@
 import path from 'node:path';
 import os from 'node:os';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { locateWords, toGray } from './geometry.js';
 import {
   PaddleOcrService,
   V6_TINY_MODEL,
@@ -181,11 +182,12 @@ export function lineIsRtl(text) {
   return false;
 }
 
-// Split each detected line into words with proportionally-estimated boxes.
-// PaddleOCR only gives line boxes, so per-word x/width are estimates based on
-// character count -- good enough for touch selection and highlighting. Lines
-// with no internal spaces (e.g. CJK) stay as a single word. Each word carries
-// its line index (li) and paragraph index (pi) for reading-order selection.
+// Split each detected line into words, each with the box it occupies in the
+// photo (see geometry.js: found from the ink when the photo is given, estimated
+// otherwise). Lines with no internal spaces (e.g. CJK) stay as a single word.
+// Each word carries its line index (li) and paragraph index (pi) for
+// reading-order selection, and the confidence of the detection box it came
+// from, so one hard-to-read box doesn't cast doubt on the rest of its line.
 //
 // For RTL lines, word *geometry* is left exactly as computed (it already
 // matches true left-to-right screen position, since that's what the raw scan
@@ -196,31 +198,56 @@ export function lineIsRtl(text) {
 // array index, so this alone makes drag-selecting and pasting RTL text work.
 // Two decimals is plenty for "was this hard to read", and keeps the sealed
 // payload small on a page full of words.
-const conf = (line) => (typeof line.c === 'number' ? { c: Math.round(line.c * 100) / 100 } : {});
+const conf = (c) => (typeof c === 'number' ? { c: Math.round(c * 100) / 100 } : {});
 
-export function splitWords(lines, paras) {
+// A line's words in screen order, with boxes. `line.t` has been through
+// tidyLine, which only ever removes spaces, so its words map back onto the
+// detection boxes' words by their non-space characters: a word tidy joined
+// across two boxes ("HOMEBASE" + "_5G") gets the union of both.
+function placeLine(line, gray) {
+  const whole = { x: line.x, y: line.y, width: line.w, height: line.h };
+  const raw = line.pieces
+    ? line.pieces.flatMap((p) => locateWords(p.text, p.box, gray).map((w) => ({ ...w, c: p.c })))
+    : locateWords(line.t, whole, gray, { padded: false }).map((w) => ({ ...w, c: line.c }));
+  const owner = raw.flatMap((w, i) => [...w.t].map(() => i));
+  const tokens = line.t.split(' ').filter(Boolean);
+  let pos = 0;
+  const out = [];
+  for (const t of tokens) {
+    const from = [...new Set([...t].map(() => owner[pos++]))].map((i) => raw[i]).filter(Boolean);
+    if (!from.length) break;
+    const x0 = Math.min(...from.map((w) => w.x));
+    const y0 = Math.min(...from.map((w) => w.y));
+    const x1 = Math.max(...from.map((w) => w.x + w.w));
+    const y1 = Math.max(...from.map((w) => w.y + w.h));
+    const cs = from.map((w) => w.c).filter((c) => typeof c === 'number');
+    out.push({ t, x: x0, y: y0, w: x1 - x0, h: y1 - y0, c: cs.length ? Math.min(...cs) : undefined });
+  }
+  // the two texts disagree (not expected): estimate across the whole line
+  if (out.length !== tokens.length || pos !== owner.length) {
+    return locateWords(line.t, whole, null, { padded: false }).map((w) => ({ ...w, c: line.c }));
+  }
+  return out;
+}
+
+export function splitWords(lines, paras, gray = null) {
   const linePi = [];
   paras.forEach((p, pi) => p.forEach((li) => (linePi[li] = pi)));
   const words = [];
   lines.forEach((line, li) => {
     const pi = linePi[li] ?? 0;
-    const rtl = lineIsRtl(line.t);
-    const parts = line.t.split(/\s+/).filter(Boolean);
-    if (parts.length <= 1) {
-      words.push({ t: fixRtlToken(line.t), x: line.x, y: line.y, w: line.w, h: line.h, li, pi, ...conf(line) });
-      return;
-    }
-    // total layout units = word characters + single-space gaps between words
-    const units = parts.reduce((s, p) => s + p.length, 0) + (parts.length - 1);
-    const perUnit = line.w / units;
-    let cx = line.x;
-    const lineWords = [];
-    for (const p of parts) {
-      const wpx = p.length * perUnit;
-      lineWords.push({ t: fixRtlToken(p), x: Math.round(cx), y: line.y, w: Math.round(wpx), h: line.h, li, pi, ...conf(line) });
-      cx += wpx + perUnit; // advance past the word and one space (screen-position order)
-    }
-    words.push(...(rtl ? lineWords.reverse() : lineWords));
+    const lineWords = placeLine(line, gray).map(({ t, x, y, w, h, c }) => ({
+      t: fixRtlToken(t),
+      x,
+      y,
+      w,
+      h,
+      li,
+      pi,
+      ...conf(c),
+    }));
+    // screen order is reading order for LTR; an RTL line reads from the right
+    words.push(...(lineIsRtl(line.t) ? lineWords.reverse() : lineWords));
   });
   return words;
 }
@@ -238,10 +265,24 @@ function wordsToText(words) {
   return byLine.map((l) => l.parts.join(' ')).join('\n');
 }
 
-function pack(lines) {
+function pack(lines, gray) {
   const paras = linesToParas(lines);
-  const words = splitWords(lines, paras);
+  const words = splitWords(lines, paras, gray);
   return { words, lineCount: lines.length, text: wordsToText(words) };
+}
+
+// The photo as grey pixels, for placing words. Never fails a scan: without it
+// the word boxes are estimated instead.
+async function grayOf(imageBuffer) {
+  try {
+    const img = await loadImage(imageBuffer);
+    const canvas = createCanvas(img.width, img.height);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    return toGray(ctx.getImageData(0, 0, img.width, img.height));
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -306,10 +347,14 @@ async function recognizePaddle(imageBuffer, script) {
       // phone so the review can point at what was hard to read
       c: Math.min(...wordsOnLine.map((w) => w.confidence ?? 1)),
       ...unionBox(wordsOnLine),
+      // each detection box and its text, for placing the words (geometry.js)
+      pieces: wordsOnLine
+        .filter((w) => w.text && w.text.trim())
+        .map((w) => ({ text: w.text, box: w.box, c: w.confidence })),
     }))
     .filter((l) => l.t)
     .slice(0, 60);
-  return { ...pack(lines), lines, confidence: result.confidence ?? 1 };
+  return { lines, confidence: result.confidence ?? 1 };
 }
 
 async function recognizeTesseract(imageBuffer) {
@@ -338,7 +383,7 @@ async function recognizeTesseract(imageBuffer) {
     }
   }
   const capped = lines.slice(0, 60);
-  return { ...pack(capped), lines: capped };
+  return { ...pack(capped, await grayOf(imageBuffer)), rotation: 0 };
 }
 
 // Resolves to { words: [{ t, x, y, w, h, li, pi }], lineCount, text, rotation }.
@@ -352,8 +397,8 @@ export async function recognize(imageBuffer, script = DEFAULT_SCRIPT) {
   const key = resolveScript(script);
   try {
     // Upright first: the overwhelmingly common case, and it costs one pass.
-    let best = { ...(await recognizePaddle(imageBuffer, key)), rotation: 0 };
-    if (isConfident(best.lines, best.confidence)) return strip(best);
+    let best = { ...(await recognizePaddle(imageBuffer, key)), rotation: 0, image: imageBuffer };
+    if (isConfident(best.lines, best.confidence)) return finish(best);
 
     // Otherwise weigh every turn and take the best reading. Deliberately no
     // early exit here: upside-down text also yields wide, plausible-looking
@@ -364,10 +409,8 @@ export async function recognize(imageBuffer, script = DEFAULT_SCRIPT) {
     for (const deg of [90, 270, 180]) {
       let candidate;
       try {
-        candidate = {
-          ...(await recognizePaddle(await rotateImage(imageBuffer, deg), key)),
-          rotation: deg,
-        };
+        const turned = await rotateImage(imageBuffer, deg);
+        candidate = { ...(await recognizePaddle(turned, key)), rotation: deg, image: turned };
       } catch {
         continue; // a failed turn must never lose us the reading we have
       }
@@ -377,17 +420,18 @@ export async function recognize(imageBuffer, script = DEFAULT_SCRIPT) {
         bestScore = score;
       }
     }
-    if (best.words.length) return strip(best);
+    if (best.lines.length) return finish(best);
   } catch (err) {
     console.warn('PaddleOCR failed, falling back to tesseract:', err.message);
   }
-  return { ...(await recognizeTesseract(imageBuffer)), rotation: 0 };
+  return recognizeTesseract(imageBuffer);
 }
 
-// `lines` is an internal scoring aid; the wire format stays words-only.
-function strip({ lines, ...rest }) {
-  void lines;
-  return rest;
+// Words are placed only for the reading that won, and in the frame it was read
+// in: the turned image, when it was turned. `lines` was a scoring aid and
+// stays off the wire.
+async function finish({ lines, rotation, image }) {
+  return { ...pack(lines, await grayOf(image)), rotation };
 }
 
 export async function warmup() {
