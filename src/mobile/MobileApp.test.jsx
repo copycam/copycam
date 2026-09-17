@@ -324,6 +324,51 @@ describe('MobileApp', () => {
     globalThis.Image = origImage;
   });
 
+  it('holds the viewfinder still while the photo is read, and brings it back live after', async () => {
+    api.loadKey.mockReturnValue(KEY);
+    let finishScan;
+    api.call.mockImplementation(async (_key, endpoint) => {
+      if (endpoint === 'ocr') return new Promise((resolve) => (finishScan = resolve));
+      return { name: 'MY-PC' };
+    });
+    const stream = { getTracks: () => [{ stop: vi.fn() }] };
+    navigator.mediaDevices = { getUserMedia: vi.fn().mockResolvedValue(stream) };
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause');
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play');
+    HTMLCanvasElement.prototype.toBlob = function (cb) {
+      cb(new Blob(['jpeg'], { type: 'image/jpeg' }));
+    };
+    HTMLCanvasElement.prototype.getContext = () => ({ drawImage: () => {} });
+
+    render(<MobileApp />);
+    await screen.findByText(/frame the text, then tap the shutter/i);
+    // a frame to grab: jsdom has no real video
+    const video = document.querySelector('video');
+    for (const [k, v] of Object.entries({ videoWidth: 1280, videoHeight: 720, clientWidth: 400, clientHeight: 800 }))
+      Object.defineProperty(video, k, { value: v, configurable: true });
+
+    fireEvent.click(screen.getByRole('button', { name: /take photo of text/i }));
+    await vi.waitFor(() => expect(finishScan).toBeTypeOf('function'));
+    // frozen on the shot while the computer reads it
+    expect(pause).toHaveBeenCalled();
+    const playsBefore = play.mock.calls.length;
+
+    // nothing readable: the problem screen replaces the camera view entirely
+    finishScan({ words: [] });
+    fireEvent.click(await screen.findByRole('button', { name: /scan again/i }));
+    await screen.findByRole('button', { name: /take photo of text/i });
+
+    // a new viewfinder, given the running stream and playing again
+    const fresh = document.querySelector('video');
+    expect(fresh).not.toBe(video);
+    expect(fresh.srcObject).toBe(stream);
+    expect(play.mock.calls.length).toBeGreaterThan(playsBefore);
+
+    pause.mockRestore();
+    play.mockRestore();
+    delete navigator.mediaDevices;
+  });
+
   it('a photo of only a Wi-Fi QR still reaches the review', async () => {
     api.loadKey.mockReturnValue(KEY);
     api.call.mockImplementation(async (_key, endpoint) => {

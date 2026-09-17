@@ -140,6 +140,23 @@ export default function MobileApp() {
   const fileInput = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  // The problem screens replace the whole camera view, so the viewfinder is a
+  // fresh <video> each time it comes back; hand it the running stream then,
+  // or it would stay black after a failed scan.
+  const attachVideo = useCallback((el) => {
+    videoRef.current = el;
+    if (el && streamRef.current && el.srcObject !== streamRef.current) {
+      el.srcObject = streamRef.current;
+      try {
+        const p = el.play?.();
+        if (p?.catch) p.catch(() => {});
+      } catch {
+        // autoplay hiccup — the video element will still render frames
+      }
+    }
+  }, []);
+  // held still on the shot while the PC reads it, as the native app does
+  const frozen = useRef(false);
   const resetTimer = useRef(null);
 
   const startCamera = useCallback(async () => {
@@ -316,11 +333,34 @@ export default function MobileApp() {
     }
   };
 
+  const resumeViewfinder = () => {
+    if (!frozen.current) return;
+    frozen.current = false;
+    try {
+      const p = videoRef.current?.play?.();
+      if (p?.catch) p.catch(() => {});
+    } catch {
+      // the next attach plays it
+    }
+  };
+  // Live again as soon as the scan is over, however it ended. Keyed on the
+  // phase alone: the shutter freezes while still idle, before the frame has
+  // been encoded, and nothing may thaw it until the scan has come and gone.
+  useEffect(() => {
+    if (phase !== 'scanning') resumeViewfinder();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refs only
+  }, [phase]);
+
   const shutter = async () => {
     if (phase !== 'idle') return;
     if (cam === 'live' && videoRef.current) {
       try {
         const el = videoRef.current;
+        // Hold the viewfinder on this frame while the PC reads it, so the phone
+        // can be lowered straight away — and the frame grabbed below is then
+        // exactly the one left on screen.
+        frozen.current = true;
+        el.pause?.();
         // capture only the on-screen framing window, not the whole frame
         const cropCss = {
           left: FRAME.left,
@@ -332,6 +372,7 @@ export default function MobileApp() {
         return;
       } catch {
         // frame grab failed (e.g. stream just died) — fall through to picker
+        resumeViewfinder();
       }
     }
     fileInput.current?.click();
@@ -443,7 +484,7 @@ export default function MobileApp() {
 
       {/* live viewfinder; the gradient backdrop only shows in fallback mode */}
       <video
-        ref={videoRef}
+        ref={attachVideo}
         autoPlay
         playsInline
         muted
