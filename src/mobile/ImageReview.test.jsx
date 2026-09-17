@@ -339,6 +339,29 @@ describe('ImageReview', () => {
     expect(screen.queryByRole('button', { name: /zoom out/i })).toBeNull();
   });
 
+  it('keeps the zoom where it is when a finger lifts and lands again mid-pinch', () => {
+    setup();
+    const canvas = primeGeometry();
+    const layer = screen.getByAltText('scanned').parentElement;
+    fireEvent.pointerDown(canvas, { pointerId: 1, clientX: 60, clientY: 30 });
+    fireEvent.pointerDown(canvas, { pointerId: 2, clientX: 80, clientY: 30 });
+    fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 100, clientY: 30 }); // spread 20 -> 40: 2x
+    expect(layer.style.transform).toContain('scale(2)');
+
+    // the second finger lifts and comes down much further away
+    fireEvent.pointerUp(canvas, { pointerId: 2 });
+    fireEvent.pointerDown(canvas, { pointerId: 3, clientX: 160, clientY: 30 });
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 160, clientY: 30 });
+    // no jump to 5x (a spread of 100 against the original 20)
+    expect(layer.style.transform).toContain('scale(2)');
+    // and the new pair zooms on from there
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 260, clientY: 30 }); // spread 100 -> 200
+    expect(layer.style.transform).toContain('scale(4)');
+
+    fireEvent.pointerUp(canvas, { pointerId: 1 });
+    fireEvent.pointerUp(canvas, { pointerId: 3 });
+  });
+
   it('a double tap zooms in, and picks nothing', () => {
     const { onSend } = setup();
     const canvas = primeGeometry();

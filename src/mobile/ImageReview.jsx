@@ -143,9 +143,14 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
     const r = containerRef.current.getBoundingClientRect();
     return [e.clientX - r.left, e.clientY - r.top];
   };
+  // the two fingers doing the zooming, and which two they are
   const fingers = () => {
-    const [a, b] = [...pointers.current.values()];
-    return { mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], dist: Math.hypot(a[0] - b[0], a[1] - b[1]) };
+    const [[ka, a], [kb, b]] = [...pointers.current.entries()];
+    return {
+      mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],
+      dist: Math.hypot(a[0] - b[0], a[1] - b[1]),
+      key: `${ka}:${kb}`,
+    };
   };
 
   const onDown = (e) => {
@@ -166,6 +171,7 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
     if (pointers.current.size === 2 && g && g.mode !== 'pinch') {
       // the second finger arrived: this was never a selection
       g.stroke = null;
+      lastTap.current = null;
       setSel(g.before);
       g.mode = 'pinch';
       g.pinch = { view: viewRef.current, ...fingers() };
@@ -181,6 +187,13 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
     if (g.mode === 'pinch') {
       if (pointers.current.size < 2) return; // one finger left over: wait for it to lift
       const f = fingers();
+      if (f.key !== g.pinch.key) {
+        // a finger lifted and landed again, or a third joined: carry on from
+        // where the photo is now, rather than jumping to where the new pair
+        // would have put it had they started the pinch
+        g.pinch = { view: viewRef.current, ...f };
+        return;
+      }
       showView(clampView(pinch(g.pinch.view, g.pinch.mid, g.pinch.dist, f.mid, f.dist), photoRect, area, margin));
       return;
     }
