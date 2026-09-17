@@ -4,7 +4,7 @@ import { IDENTITY, clampView, pinch, settle, toLayer, toggleZoom } from './view.
 import { annotate, anyDoubtful } from './annotate.js';
 
 const ACC = '#CFFF3B';
-const COLLAPSED = 216; // bottom-sheet height when not expanded
+const COLLAPSED = 224; // bottom-sheet height when not expanded: two lines of preview
 
 // Keep the photo (and so every selectable word) clear of the screen edges.
 // Text touching the edge would otherwise force the drag to start inside the
@@ -14,7 +14,8 @@ const COLLAPSED = 216; // bottom-sheet height when not expanded
 const EDGE_X = 24;
 const EDGE_Y = 12;
 // how far the top bar reaches down over the photo: its offset, a pill, a gap
-const TOP_BAR = 20 + 34 + 10;
+const PILL_H = 32;
+const TOP_BAR = 20 + PILL_H + 16;
 
 // Google-Translate-style scan review: the captured photo with a native
 // text-selection feel. Each drag across the words (a tap is a drag that stays
@@ -40,9 +41,12 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
   const expandedH = Math.max(COLLAPSED, Math.round(vh * 0.62));
 
   // object-fit: contain mapping from image pixels to screen coordinates.
-  // The photo is fitted into the container minus EDGE_X/EDGE_Y, then centred
-  // in the full container — so it always keeps at least that margin, and the
-  // offsets stay absolute within the container (pointer mapping is unchanged).
+  // The photo is fitted into the container minus EDGE_X/EDGE_Y, so it always
+  // keeps at least that margin, and the offsets stay absolute within the
+  // container (pointer mapping is unchanged). Vertically it centres below the
+  // top bar where there's height to spare, rather than sliding its top edge
+  // under Retake / All / Clear; a photo too tall for that keeps its size and
+  // moves down only as far as the bottom margin allows.
   useLayoutEffect(() => {
     const measure = () => {
       setVh(window.innerHeight);
@@ -54,7 +58,9 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
       const availW = Math.max(1, cw - EDGE_X * 2);
       const availH = Math.max(1, ch - EDGE_Y * 2);
       const scale = Math.min(availW / photo.width, availH / photo.height);
-      setMap({ scale, offX: (cw - photo.width * scale) / 2, offY: (ch - photo.height * scale) / 2, cw, ch });
+      const h = photo.height * scale;
+      const offY = Math.max(EDGE_Y, Math.min(TOP_BAR + (ch - TOP_BAR - EDGE_Y - h) / 2, ch - EDGE_Y - h));
+      setMap({ scale, offX: (cw - photo.width * scale) / 2, offY, cw, ch });
     };
     measure();
     window.addEventListener('resize', measure);
@@ -305,7 +311,9 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
     border: 'none',
     cursor: 'pointer',
     borderRadius: 999,
-    padding: '8px 14px',
+    height: PILL_H,
+    boxSizing: 'border-box',
+    padding: '0 14px',
     fontSize: 12.5,
     fontWeight: 600,
     fontFamily: 'inherit',
@@ -448,11 +456,11 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
           onPointerMove={sheetMove}
           onPointerUp={sheetUp}
           onPointerCancel={sheetUp}
-          style={{ padding: '18px 0 4px', cursor: 'grab', touchAction: 'none', flex: 'none', userSelect: 'none' }}
+          style={{ padding: '14px 0 0', cursor: 'grab', touchAction: 'none', flex: 'none', userSelect: 'none' }}
           aria-label="Drag to preview"
         >
           <div style={{ width: 44, height: 5, borderRadius: 3, background: 'rgba(0,0,0,.18)', margin: '0 auto' }} />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 18px 12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 18px' }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: edited || editing ? '#161616' : '#8a8a82', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {editing
                 ? 'Editing text'

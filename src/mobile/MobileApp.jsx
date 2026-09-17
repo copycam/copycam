@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadKey, forgetKey, call, isConnectionError, isPairingRejected } from './api.js';
-import { downscalePhoto, blobToBytes, frameToJpeg, computeFrame, rotateBlob } from './image.js';
+import { downscalePhoto, blobToBytes, frameToJpeg, computeFrame, rotateBlob, CHROME } from './image.js';
 import { toB64u } from '../../shared/crypto.js';
 import ImageReview from './ImageReview.jsx';
 import { SCRIPTS, scriptLabel } from './scripts.js';
@@ -52,26 +52,59 @@ const ctlPill = {
   boxShadow: 'inset 0 0 0 .5px rgba(255,255,255,.16)',
   color: '#fff',
   borderRadius: 999,
-  padding: '8px 14px',
+  height: CHROME.pill,
+  boxSizing: 'border-box',
+  flex: 'none',
+  padding: '0 14px',
   fontSize: 12.5,
   fontWeight: 600,
   fontFamily: 'inherit',
   whiteSpace: 'nowrap',
 };
 
-// Viewport size, kept current across rotation. iOS Safari can't be orientation
-// locked from the page, so instead every size that matters is derived from this
-// and the layout stays proportional rather than breaking in landscape.
+// The page's safe-area insets, which CSS knows and JS doesn't: measured off a
+// hidden probe. Zero in an ordinary browser tab; non-zero full screen under a
+// notch or a home indicator.
+function readInsets() {
+  const insets = { top: 0, right: 0, bottom: 0, left: 0 };
+  if (typeof document === 'undefined' || !document.body) return insets;
+  const probe = document.createElement('div');
+  probe.style.cssText =
+    'position:fixed;visibility:hidden;pointer-events:none;' +
+    'padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+  document.body.appendChild(probe);
+  const cs = getComputedStyle(probe);
+  for (const side of ['top', 'right', 'bottom', 'left']) {
+    insets[side] = parseFloat(cs.getPropertyValue(`padding-${side}`)) || 0;
+  }
+  probe.remove();
+  return insets;
+}
+
+const measureViewport = () => ({
+  w: typeof window === 'undefined' ? 390 : window.innerWidth,
+  h: typeof window === 'undefined' ? 844 : window.innerHeight,
+  insets: readInsets(),
+});
+
+// Viewport size and safe-area insets, kept current across rotation. iOS Safari
+// can't be orientation locked from the page, so instead every size that matters
+// is derived from this and the layout stays proportional rather than breaking
+// in landscape.
 function useViewport() {
-  const [vp, setVp] = useState(() => ({
-    w: typeof window === 'undefined' ? 390 : window.innerWidth,
-    h: typeof window === 'undefined' ? 844 : window.innerHeight,
-  }));
+  const [vp, setVp] = useState(measureViewport);
   useEffect(() => {
-    const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    let frame = 0;
+    const onResize = () => {
+      setVp(measureViewport());
+      // iOS can report the new size a frame before the new insets
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setVp(measureViewport()));
+    };
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('orientationchange', onResize);
     };
@@ -130,12 +163,8 @@ export default function MobileApp() {
   const [pickerDragging, setPickerDragging] = useState(false);
   const pickerDrag = useRef(null);
   const vp = useViewport();
-  const FRAME = computeFrame(vp.w, vp.h);
-  // The capture hint lives in the strip below the frame. Portrait has the
-  // shutter down there too, so it sits above it; landscape's strip is only a
-  // margin, so the hint centres in it. Either way it is clipped to the strip.
-  const hintBottom = FRAME.landscape ? Math.max(10, Math.round(FRAME.bottom / 2) - 8) : 146;
-  const hintMaxH = FRAME.bottom - hintBottom - 6;
+  // the scan window, and where everything around it goes
+  const FRAME = computeFrame(vp.w, vp.h, vp.insets);
   const keyRef = useRef(null);
   const fileInput = useRef(null);
   const videoRef = useRef(null);
@@ -509,19 +538,38 @@ export default function MobileApp() {
         </>
       )}
 
+      {/* the sweep stays inside the window rather than crossing the pills */}
       {phase === 'scanning' && (
-        <div style={{ position: 'absolute', left: '8%', right: '8%', height: 3, borderRadius: 3, background: ACC, boxShadow: `0 0 22px 4px ${ACC}`, animation: 'ccSweep 1.4s ease-in-out infinite alternate', top: '8%' }} />
+        <div style={{ position: 'absolute', left: FRAME.left + 10, right: FRAME.right + 10, top: FRAME.top, bottom: FRAME.bottom, pointerEvents: 'none' }}>
+          <div style={{ position: 'absolute', left: 0, right: 0, height: 3, borderRadius: 3, background: ACC, boxShadow: `0 0 22px 4px ${ACC}`, animation: 'ccSweep 1.4s ease-in-out infinite alternate', top: '8%' }} />
+        </div>
       )}
 
-      {/* linked pill */}
-      <div style={{ position: 'absolute', top: 'max(24px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(20,21,24,.55)', backdropFilter: 'blur(10px)', border: '.5px solid rgba(255,255,255,.14)', borderRadius: 999, padding: '7px 14px', fontSize: 12.5, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap' }}>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: ACC, flex: 'none', boxShadow: `0 0 8px ${ACC}` }} />
-        {pcName} — linked
-      </div>
+      {/* linked pill, then the capture controls: under it in portrait, beside
+          it in landscape, where height is what the scan window is short of */}
+      <div
+        style={{
+          position: 'absolute',
+          top: FRAME.pillsTop,
+          // over the window's centre, which landscape's shutter column moves left
+          left: FRAME.landscape ? FRAME.left : vp.insets.left + 16,
+          right: FRAME.landscape ? FRAME.right : vp.insets.right + 16,
+          display: 'flex',
+          flexDirection: FRAME.landscape ? 'row' : 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: CHROME.pillGap,
+          pointerEvents: 'none',
+        }}
+      >
+        <div style={{ ...ctlPill, gap: 8, cursor: 'default', flex: '0 1 auto', minWidth: 0, maxWidth: FRAME.landscape ? 260 : '100%' }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: ACC, flex: 'none', boxShadow: `0 0 8px ${ACC}` }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{pcName} — linked</span>
+        </div>
 
-      {/* capture controls: flash (where the browser allows it) + script */}
-      {(phase === 'idle' || phase === 'scanning') && (
-        <div style={{ position: 'absolute', top: 'calc(max(24px, env(safe-area-inset-top)) + 46px)', left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap', padding: '0 16px' }}>
+        {/* capture controls: flash (where the browser allows it) + script */}
+        {(phase === 'idle' || phase === 'scanning') && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: CHROME.pillGap, maxWidth: '100%', pointerEvents: 'auto' }}>
           {torchable && (
             <button onClick={toggleTorch} aria-label={torchOn ? 'Turn flash off' : 'Turn flash on'} aria-pressed={torchOn} style={{ ...ctlPill, background: torchOn ? ACC : ctlPill.background, color: torchOn ? '#161616' : '#fff' }}>
               <svg width="11" height="15" viewBox="0 0 11 15" aria-hidden="true" style={{ flex: 'none' }}>
@@ -545,17 +593,18 @@ export default function MobileApp() {
               setPickerY(0);
               setPickerOpen(true);
             }}
-            style={ctlPill}
+            style={{ ...ctlPill, flex: '0 1 auto', minWidth: 0 }}
             aria-label="Change text language"
           >
             <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" style={{ flex: 'none' }}>
               <circle cx="8" cy="8" r="6.6" fill="none" stroke="#fff" strokeWidth="1.4" />
               <path d="M1.6 8h12.8M8 1.4c3.4 3.7 3.4 9.5 0 13.2M8 1.4c-3.4 3.7-3.4 9.5 0 13.2" fill="none" stroke="#fff" strokeWidth="1.4" />
             </svg>
-            {scriptLabel(script)}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{scriptLabel(script)}</span>
           </button>
         </div>
-      )}
+        )}
+      </div>
 
       {/* script picker — tap the backdrop or swipe the header down to dismiss */}
       {pickerOpen && (
@@ -618,55 +667,45 @@ export default function MobileApp() {
         </div>
       )}
 
-      {/* hidden outright when the strip below the frame is too short for text */}
-      {phase === 'idle' && hintMaxH >= 16 && (
-        // pinned to the strip below the frame's bottom edge, and clipped to
-        // it, so the hint can never spill into the scan window
+      {/* The hint sits between the window and the shutter, in exactly the
+          lines computeFrame made room for, centred under the window. It is
+          still clipped to that room, so an unexpectedly wide font can't push
+          it into the window. */}
+      {(phase === 'idle' || phase === 'scanning') && FRAME.hintLines > 0 && (
         <div
           style={{
             position: 'absolute',
-            bottom: hintBottom,
-            left: 0,
-            right: 0,
-            maxHeight: hintMaxH,
+            bottom: FRAME.hintBottom,
+            left: FRAME.left,
+            right: FRAME.right,
+            maxHeight: FRAME.hintLines > 1 ? CHROME.hintLine + CHROME.hintLine2 : CHROME.hintLine,
             overflow: 'hidden',
             textAlign: 'center',
             fontSize: 13,
+            lineHeight: `${CHROME.hintLine}px`,
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis',
             color: 'rgba(255,255,255,.65)',
             textShadow: '0 1px 4px rgba(0,0,0,.6)',
-            // landscape keeps clear of the shutter now parked on the right
-            padding: FRAME.landscape ? '0 116px 0 24px' : '0 24px',
           }}
         >
-          {cam === 'live' ? 'Frame the text, then tap the shutter' : 'Tap the shutter, then photograph the text'}
-          {/* the extra lines only appear where there is room for them */}
-          {vp.h >= 520 && (
-            <>
-              <div style={{ marginTop: 4, fontSize: 11.5, lineHeight: 1.4, color: 'rgba(255,255,255,.44)' }}>
-                {cam === 'live' ? 'Only what’s inside the frame is read' : 'Anything else in the photo is read too'}
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <SafetyNote text="end-to-end encrypted" color="rgba(255,255,255,.4)" />
-              </div>
-            </>
+          {phase === 'scanning'
+            ? 'Reading text…'
+            : cam === 'live'
+              ? 'Frame the text, then tap the shutter'
+              : 'Tap the shutter, then photograph the text'}
+          {phase === 'idle' && FRAME.hintLines > 1 && (
+            <div style={{ marginTop: CHROME.hintLine2 - 16, fontSize: 11.5, lineHeight: '16px', color: 'rgba(255,255,255,.44)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {cam === 'live' ? 'Only what’s inside the frame is read' : 'Anything else in the photo is read too'}
+            </div>
           )}
         </div>
       )}
-      {phase === 'scanning' && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: hintBottom,
-            left: 0,
-            right: 0,
-            textAlign: 'center',
-            fontSize: 13,
-            color: 'rgba(255,255,255,.65)',
-            textShadow: '0 1px 4px rgba(0,0,0,.6)',
-            padding: FRAME.landscape ? '0 116px 0 24px' : '0 24px',
-          }}
-        >
-          Reading text…
+
+      {/* under the shutter, where the linking screen keeps it too */}
+      {(phase === 'idle' || phase === 'scanning') && FRAME.note && (
+        <div style={{ position: 'absolute', bottom: FRAME.noteBottom, left: 0, right: 0, height: CHROME.note, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+          <SafetyNote text="end-to-end encrypted" color="rgba(255,255,255,.4)" />
         </div>
       )}
 
@@ -679,10 +718,10 @@ export default function MobileApp() {
             // landscape puts the shutter under the thumb on the right edge;
             // portrait keeps it bottom-centre
             ...(FRAME.landscape
-              ? { right: 'max(22px, env(safe-area-inset-right))', top: '50%', transform: 'translateY(-50%)' }
-              : { bottom: 'max(64px, env(safe-area-inset-bottom))', left: '50%', transform: 'translateX(-50%)' }),
-            width: 78,
-            height: 78,
+              ? { right: FRAME.shutterEdge, top: '50%', transform: 'translateY(-50%)' }
+              : { bottom: FRAME.shutterEdge, left: '50%', transform: 'translateX(-50%)' }),
+            width: CHROME.shutter,
+            height: CHROME.shutter,
             borderRadius: '50%',
             border: '4px solid rgba(255,255,255,.85)',
             background: 'transparent',

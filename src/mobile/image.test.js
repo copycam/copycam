@@ -1,5 +1,71 @@
 import { describe, it, expect } from 'vitest';
-import { coverCropRect, computeFrame } from './image.js';
+import { coverCropRect, computeFrame, CHROME } from './image.js';
+
+describe('camera screen layout', () => {
+  // common phone viewports, including iPhone Safari with its toolbars showing
+  const PORTRAIT = [[320, 548], [375, 553], [393, 659], [393, 760], [430, 740], [430, 932]];
+  const LANDSCAPE = [[568, 300], [667, 331], [852, 340], [932, 400]];
+
+  it('leaves clear space between the pills and the scan window', () => {
+    for (const [vw, vh] of PORTRAIT) {
+      const f = computeFrame(vw, vh);
+      // the linked pill, then the flash/language row under it
+      const pillsBottom = f.pillsTop + CHROME.pill * 2 + CHROME.pillGap;
+      expect(f.top - pillsBottom, `${vw}x${vh}`).toBeGreaterThanOrEqual(CHROME.clear);
+    }
+    for (const [vw, vh] of LANDSCAPE) {
+      const f = computeFrame(vw, vh);
+      // one row beside each other
+      expect(f.top - (f.pillsTop + CHROME.pill), `${vw}x${vh}`).toBeGreaterThanOrEqual(CHROME.clear);
+    }
+  });
+
+  it('stacks note, shutter, hint and window up from the bottom without touching', () => {
+    for (const [vw, vh] of PORTRAIT) {
+      const f = computeFrame(vw, vh);
+      const at = `${vw}x${vh}`;
+      expect(f.note, at).toBe(true);
+      expect(f.shutterEdge - (f.noteBottom + CHROME.note), at).toBeGreaterThanOrEqual(CHROME.clear);
+      expect(f.hintBottom - (f.shutterEdge + CHROME.shutter), at).toBeGreaterThanOrEqual(CHROME.hintGap);
+      expect(f.hintLines, at).toBeGreaterThan(0);
+      const hintTop = f.hintBottom + CHROME.hintLine + (f.hintLines > 1 ? CHROME.hintLine2 : 0);
+      expect(f.bottom - hintTop, at).toBeGreaterThanOrEqual(CHROME.clear);
+    }
+  });
+
+  it('shows the second hint line only where the window can spare it', () => {
+    expect(computeFrame(393, 659).hintLines).toBe(2);
+    expect(computeFrame(375, 553).hintLines).toBe(1);
+    // a line less gives the window the height back
+    expect(computeFrame(375, 599).bottom).toBeLessThan(computeFrame(375, 600).bottom);
+  });
+
+  it('keeps a one-line hint inside landscape’s bottom margin, clear of the window', () => {
+    for (const [vw, vh] of LANDSCAPE) {
+      const f = computeFrame(vw, vh);
+      expect(f.hintLines, `${vw}x${vh}`).toBe(1);
+      expect(f.hintBottom).toBeGreaterThan(0);
+      expect(f.bottom - (f.hintBottom + CHROME.hintLine)).toBeGreaterThanOrEqual(6);
+    }
+  });
+
+  it('moves everything in by the safe-area insets when the page runs full screen', () => {
+    const insets = { top: 59, right: 0, bottom: 34, left: 0 };
+    const bare = computeFrame(393, 852);
+    const safe = computeFrame(393, 852, insets);
+    expect(safe.pillsTop).toBe(bare.pillsTop + 59);
+    expect(safe.top).toBe(bare.top + 59);
+    // the note clears the home indicator, and everything above it follows
+    expect(safe.noteBottom).toBeGreaterThanOrEqual(34);
+    expect(safe.shutterEdge - (safe.noteBottom + CHROME.note)).toBeGreaterThanOrEqual(CHROME.clear);
+    expect(safe.bottom).toBeGreaterThan(bare.bottom);
+
+    const side = { top: 0, right: 59, bottom: 21, left: 59 };
+    const land = computeFrame(852, 393, side);
+    expect(land.left).toBe(computeFrame(852, 393).left + 59);
+    expect(land.shutterEdge).toBe(59);
+  });
+});
 
 describe('computeFrame', () => {
   const usable = (vw, vh) => {
@@ -26,8 +92,9 @@ describe('computeFrame', () => {
     // and the bottom is now just a margin, so the window is much taller
     expect(f.bottom).toBeLessThan(100);
     expect(h).toBeGreaterThan(200);
-    // the window must start below the status + flash/language pills (~104px)
-    expect(f.top).toBeGreaterThanOrEqual(104);
+    // the pills share one row, so the window starts just below it
+    expect(f.top).toBeGreaterThanOrEqual(f.pillsTop + CHROME.pill + CHROME.clear);
+    expect(f.top).toBeLessThan(100);
   });
 
   it('landscape is taller and narrower than the old bottom-shutter layout', () => {
