@@ -84,6 +84,51 @@ describe('ImageReview', () => {
     expect(onSend).toHaveBeenCalledWith('two');
   });
 
+  it('opens with everything as a suggestion, which the first tap replaces', () => {
+    const { onSend } = setup();
+    const canvas = primeGeometry();
+    expect(screen.getByText(/all text/i)).toBeInTheDocument();
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 10 }); // "two"
+    fireEvent.pointerUp(canvas);
+    expect(screen.getByText(/1 word selected/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /send to MY-PC/i }));
+    expect(onSend).toHaveBeenLastCalledWith('two');
+  });
+
+  it('adds what a later tap or drag picks, instead of replacing it', () => {
+    const { onSend } = setup();
+    const canvas = primeGeometry();
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 10 }); // "two"
+    fireEvent.pointerUp(canvas);
+    fireEvent.pointerDown(canvas, { clientX: 39, clientY: 73 }); // "four"
+    fireEvent.pointerUp(canvas);
+    fireEvent.click(screen.getByRole('button', { name: /send to MY-PC/i }));
+    expect(onSend).toHaveBeenLastCalledWith('two\n\nfour');
+  });
+
+  it('takes words away with a drag that starts on a selected word', () => {
+    const { onSend } = setup();
+    const canvas = primeGeometry();
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    // from "one" across to "two", both selected
+    fireEvent.pointerDown(canvas, { clientX: 39, clientY: 20 });
+    fireEvent.pointerMove(canvas, { clientX: 77, clientY: 20 });
+    fireEvent.pointerUp(canvas);
+    fireEvent.click(screen.getByRole('button', { name: /send to MY-PC/i }));
+    expect(onSend).toHaveBeenLastCalledWith('three\n\nfour');
+  });
+
+  it('a tap on a selected word deselects it, and pieces from separate lines go on separate lines', () => {
+    const { onSend } = setup();
+    const canvas = primeGeometry();
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    fireEvent.pointerDown(canvas, { clientX: 77, clientY: 20 }); // "two" off
+    fireEvent.pointerUp(canvas);
+    fireEvent.click(screen.getByRole('button', { name: /send to MY-PC/i }));
+    // "one" and "three" share a paragraph, but "two" between them is out
+    expect(onSend).toHaveBeenLastCalledWith('one\nthree\n\nfour');
+  });
+
   const sheetHeight = () => parseInt(screen.getByLabelText('Drag to preview').parentElement.style.height, 10);
 
   it('the grabber toggles the preview sheet open and closed', () => {
@@ -102,7 +147,7 @@ describe('ImageReview', () => {
     setup();
     const collapsed = sheetHeight();
     // press on the status text (well away from the little grabber pill)
-    const status = screen.getByText(/words selected/i);
+    const status = screen.getByText(/all text/i);
     fireEvent.pointerDown(status, { clientY: 600 });
     fireEvent.pointerMove(status, { clientY: 380 }); // drag upward
     fireEvent.pointerUp(status, { clientY: 380 });
@@ -141,7 +186,7 @@ describe('ImageReview', () => {
     fireEvent.click(screen.getByRole('button', { name: /edit the text/i }));
     fireEvent.click(screen.getByRole('button', { name: /done/i }));
     expect(screen.queryByRole('button', { name: /discard edits/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/4 words selected/i)).toBeInTheDocument();
+    expect(screen.getByText(/all text/i)).toBeInTheDocument();
   });
 
   it('marks look-alike characters in codes, and spaces beside them', () => {
@@ -259,7 +304,7 @@ describe('ImageReview', () => {
     canvas.getBoundingClientRect = () => ({ left: 0, top: 0, right: 800, bottom: 120, width: 800, height: 120 });
     fireEvent(window, new Event('resize'));
 
-    const bars = [...canvas.querySelectorAll('div')].filter((d) => d.style.height && d.style.borderRadius);
+    const bars = [...canvas.querySelectorAll('div')].filter((d) => d.style.transform.startsWith('rotate'));
     expect(bars.length).toBe(3);
 
     const rects = bars

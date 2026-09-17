@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { rangeIndices, selectionBars, selectionText, wordAt } from './selection.js';
-import { IDENTITY, clampView, pinch, toLayer, toggleZoom } from './view.js';
+import { NOTHING, beginStroke, everything, selectionBars, selectionText, strokeTo, wordAt } from './selection.js';
+import { IDENTITY, clampView, pinch, settle, toLayer, toggleZoom } from './view.js';
 import { annotate, anyDoubtful } from './annotate.js';
 
 const ACC = '#CFFF3B';
@@ -13,21 +13,23 @@ const COLLAPSED = 216; // bottom-sheet height when not expanded
 // matters for that; the vertical one is smaller and just for symmetry.
 const EDGE_X = 24;
 const EDGE_Y = 12;
+// how far the top bar reaches down over the photo: its offset, a pill, a gap
+const TOP_BAR = 20 + 34 + 10;
 
 // Google-Translate-style scan review: the captured photo with a native
-// text-selection feel. Drag across the words to select a contiguous run
-// (a tap selects one word); the selection highlights as one bar per line, along
-// the line's slant. Two fingers zoom and pan the photo; a double tap zooms in
-// or back out.
+// text-selection feel. Each drag across the words (a tap is a drag that stays
+// on one word) adds them to the selection, or takes them away when it starts on
+// a selected word; the opening everything-selected is a suggestion the first
+// drag replaces (see selection.js). Highlights run along each line's slant. Two
+// fingers zoom and pan the photo; a double tap zooms in or back out.
 // The bottom sheet swipes up to preview exactly what will be sent, and the
 // text can be edited before sending — the same behaviour as the native app's
 // review (mobile/src/screens/ReviewScreen.tsx).
 export default function ImageReview({ photo, words, wifi = null, pcName, sending, sendError = null, onSend, onRetake }) {
   const containerRef = useRef(null);
-  const drag = useRef(null);
   const sheetDrag = useRef(null);
   // selection is one contiguous range [anchor..focus]; default = everything
-  const [sel, setSel] = useState(() => (words.length ? { anchor: 0, focus: words.length - 1 } : null));
+  const [sel, setSel] = useState(() => everything(words.length, true));
   const [map, setMap] = useState({ scale: 0, offX: 0, offY: 0, cw: 0, ch: 0 });
   const [sheetH, setSheetH] = useState(COLLAPSED);
   const [dragging, setDragging] = useState(false);
@@ -68,7 +70,7 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
     setSheetH((h) => Math.min(h, expandedH));
   }, [expandedH]);
 
-  const indices = useMemo(() => rangeIndices(sel?.anchor, sel?.focus), [sel]);
+  const indices = sel.picked;
   const n = indices.length;
   const selected = useMemo(() => selectionText(words, indices), [words, indices]);
 
@@ -107,13 +109,19 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
   const [zoom, setZoom] = useState(1);
   const photoRect = { x: map.offX, y: map.offY, w: photo.width * map.scale, h: photo.height * map.scale };
   const area = { width: map.cw, height: map.ch };
-  const margin = { x: EDGE_X, y: EDGE_Y };
+  const margin = { x: EDGE_X, top: TOP_BAR, bottom: EDGE_Y };
   const showView = (v, animate = false) => {
     viewRef.current = v;
     const el = layerRef.current;
     if (!el) return;
     el.style.transition = animate ? 'transform .24s cubic-bezier(.2,.8,.2,1)' : 'none';
     el.style.transform = `translate(${v.tx}px, ${v.ty}px) scale(${v.z})`;
+  };
+  // A layer marked will-change is painted once and its bitmap stretched while it
+  // moves, which is smooth but blurs a zoomed photo; so the hint is only set for
+  // the length of a pinch, and dropping it repaints the photo sharp.
+  const smoothWhile = (on) => {
+    if (layerRef.current) layerRef.current.style.willChange = on ? 'transform' : 'auto';
   };
   // a new layout (rotation, resize) starts unzoomed
   useEffect(() => {
@@ -145,20 +153,23 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
     const [x, y] = local(e);
     pointers.current.set(e.pointerId, [x, y]);
     if (pointers.current.size === 1) {
-      gesture.current = { mode: 'select', before: sel, moved: false, x, y, at: Date.now() };
+      const g = { mode: 'stroke', before: sel, stroke: null, focus: null, moved: false, x, y, at: Date.now() };
+      gesture.current = g;
       const idx = wordAtPoint(x, y);
       if (idx == null) return;
-      drag.current = idx;
-      setSel({ anchor: idx, focus: idx });
+      g.stroke = beginStroke(sel, idx);
+      g.focus = idx;
+      setSel(strokeTo(g.stroke, idx));
       return;
     }
     const g = gesture.current;
     if (pointers.current.size === 2 && g && g.mode !== 'pinch') {
       // the second finger arrived: this was never a selection
-      drag.current = null;
+      g.stroke = null;
       setSel(g.before);
       g.mode = 'pinch';
       g.pinch = { view: viewRef.current, ...fingers() };
+      smoothWhile(true);
     }
   };
   const onMove = (e) => {
@@ -174,25 +185,29 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
       return;
     }
     if (Math.abs(x - g.x) + Math.abs(y - g.y) > 10) g.moved = true;
-    if (drag.current == null) return;
+    if (!g.stroke) return;
     const idx = wordAtPoint(x, y);
-    if (idx != null) setSel({ anchor: drag.current, focus: idx });
+    if (idx == null || idx === g.focus) return;
+    g.focus = idx;
+    setSel(strokeTo(g.stroke, idx));
   };
   const onUp = (e) => {
     pointers.current.delete(e.pointerId);
     if (pointers.current.size) return;
     const g = gesture.current;
     gesture.current = null;
-    drag.current = null;
     if (!g) return;
     if (g.mode === 'pinch') {
-      setZoom(viewRef.current.z);
+      smoothWhile(false);
+      const rest = settle(viewRef.current);
+      if (rest !== viewRef.current) showView(rest, true);
+      setZoom(rest.z);
       return;
     }
     if (g.moved || Date.now() - g.at > 300) return;
     const prev = lastTap.current;
     if (prev && g.at - prev.at < 350 && Math.hypot(g.x - prev.x, g.y - prev.y) < 40) {
-      // a double tap zooms; the word its first tap selected is put back
+      // a double tap zooms; whatever its two taps did to the selection is put back
       lastTap.current = null;
       setSel(prev.before);
       const v = toggleZoom(viewRef.current, g.x, g.y, photoRect, area, margin);
@@ -298,7 +313,7 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
         onPointerCancel={onUp}
         style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: COLLAPSED, touchAction: 'none', overflow: 'hidden' }}
       >
-        <div ref={layerRef} style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', willChange: 'transform' }}>
+        <div ref={layerRef} style={{ position: 'absolute', inset: 0, transformOrigin: '0 0' }}>
           <img
             src={photo.url}
             alt="scanned"
@@ -310,9 +325,22 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
               width: photo.width * map.scale,
               height: photo.height * map.scale,
               userSelect: 'none',
-              filter: 'brightness(.62)',
               // makes the inset read as a deliberate frame, not a stray gap
               borderRadius: 10,
+            }}
+          />
+          {/* dimmed so the highlights read, by a veil rather than a filter on
+              the photo, which some browsers paint at its unzoomed size */}
+          <div
+            style={{
+              position: 'absolute',
+              left: map.offX,
+              top: map.offY,
+              width: photo.width * map.scale,
+              height: photo.height * map.scale,
+              borderRadius: 10,
+              background: 'rgba(20,21,24,.38)',
+              pointerEvents: 'none',
             }}
           />
           {map.scale > 0 &&
@@ -343,9 +371,12 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
                     // along the line's own slant
                     transform: `rotate(${Math.atan2(b.y1 - b.y0, b.x1 - b.x0)}rad)`,
                     borderRadius: px(0.25, 2, 6),
-                    // amber where the recogniser was unsure of a word in it
-                    background: b.doubt ? 'rgba(255,193,7,.36)' : 'color-mix(in srgb, ' + ACC + ' 40%, transparent)',
-                    boxShadow: `0 0 0 ${px(0.06, 0.5, 1.25)}px ${ACC}`,
+                    // faint while it's only the opening suggestion; amber
+                    // where the recogniser was unsure of a word in it
+                    background: b.doubt
+                      ? `rgba(255,193,7,${sel.soft ? 0.16 : 0.36})`
+                      : `color-mix(in srgb, ${ACC} ${sel.soft ? 16 : 40}%, transparent)`,
+                    boxShadow: `0 0 0 ${px(0.06, 0.5, 1.25)}px ${sel.soft ? 'rgba(207,255,59,.45)' : ACC}`,
                     pointerEvents: 'none',
                   }}
                 />
@@ -372,10 +403,10 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
               Fit
             </button>
           )}
-          <button onClick={() => setSel({ anchor: 0, focus: words.length - 1 })} style={pill}>
+          <button onClick={() => setSel(everything(words.length))} style={pill}>
             All
           </button>
-          <button onClick={() => setSel(null)} style={pill}>
+          <button onClick={() => setSel(NOTHING)} style={pill}>
             Clear
           </button>
         </div>
@@ -416,7 +447,9 @@ export default function ImageReview({ photo, words, wifi = null, pcName, sending
                   ? `Edited · ${text.length} character${text.length === 1 ? '' : 's'}`
                   : n === 0
                     ? 'Nothing selected'
-                    : `${n} word${n === 1 ? '' : 's'} selected`}
+                    : sel.soft
+                      ? 'All text · tap or drag to choose'
+                      : `${n} word${n === 1 ? '' : 's'} selected`}
             </span>
             <span style={{ display: 'flex', gap: 8, flex: 'none' }}>
               {edited && (

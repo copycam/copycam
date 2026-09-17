@@ -6,11 +6,18 @@
 //
 // The native app keeps an identical copy (mobile/src/lib/view.ts); the two are
 // held together by shared/selection-compat.test.js.
+//
+// Margins ({ x, top, bottom }) say how close the photo may come to each edge of
+// the review area. `top` clears the buttons laid over the photo, so a zoomed
+// photo's first line can always be brought down to where it can be touched.
 
 export const IDENTITY = { z: 1, tx: 0, ty: 0 };
 // enough to bring small print in a sideways shot up to a comfortable size
 export const MAX_ZOOM = 6;
 export const DOUBLE_TAP_ZOOM = 2.5;
+// a gesture that ends below this goes back to the whole photo, rather than
+// leaving it a hair's breadth zoomed and slightly off centre
+export const SNAP_BELOW = 1.08;
 
 const clampZ = (z) => Math.min(MAX_ZOOM, Math.max(1, z));
 
@@ -19,18 +26,24 @@ export function toLayer(v, x, y) {
   return [(x - v.tx) / v.z, (y - v.ty) / v.z];
 }
 
-// Keep the photo in view: centred along an axis where it fits, and where it
-// doesn't, its edges come no further in than `margin` from the area's edges.
+// Keep the photo on screen, and otherwise let it go where it's pushed. Along
+// each axis its leading edge may sit anywhere between two limits: against the
+// near margin, and where its far edge meets the far margin. While the zoomed
+// photo is smaller than the area that lets it slide freely inside it; once it's
+// larger, the same two limits stop either edge coming in past its margin. The
+// centred position is always allowed too, so the photo as first laid out (which
+// only keeps the plain edge margin) never jumps when a pinch begins.
 export function clampView(v, photo, area, margin) {
-  const axis = (t, lo, size, extent, m) => {
+  const axis = (t, lo, size, extent, near, far) => {
     const scaled = size * v.z;
-    if (scaled <= extent - 2 * m) return (extent - scaled) / 2 - lo * v.z;
-    return Math.min(m - lo * v.z, Math.max(extent - m - (lo + size) * v.z, t));
+    const limits = [near, extent - far - scaled, (extent - scaled) / 2];
+    const start = Math.min(Math.max(lo * v.z + t, Math.min(...limits)), Math.max(...limits));
+    return start - lo * v.z;
   };
   return {
     z: v.z,
-    tx: axis(v.tx, photo.x, photo.w, area.width, margin.x),
-    ty: axis(v.ty, photo.y, photo.h, area.height, margin.y),
+    tx: axis(v.tx, photo.x, photo.w, area.width, margin.x, margin.x),
+    ty: axis(v.ty, photo.y, photo.h, area.height, margin.top, margin.bottom),
   };
 }
 
@@ -48,6 +61,11 @@ export function pinch(start, mid0, dist0, mid, dist) {
   const [lx, ly] = toLayer(start, mid0[0], mid0[1]);
   const z = clampZ(start.z * (dist / Math.max(1, dist0)));
   return { z, tx: mid[0] - lx * z, ty: mid[1] - ly * z };
+}
+
+// Where a gesture comes to rest: back to the whole photo when barely zoomed.
+export function settle(v) {
+  return v.z < SNAP_BELOW ? IDENTITY : v;
 }
 
 // Double tap: in to a reading size around the tap, or back out to the whole photo.
