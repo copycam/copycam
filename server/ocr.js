@@ -2,6 +2,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { locateWords, toGray } from './geometry.js';
+import { withBundled } from './models.js';
 import {
   PaddleOcrService,
   V6_TINY_MODEL,
@@ -85,7 +86,7 @@ let tesseractPromise = null;
 function getPaddle(script) {
   const key = resolveScript(script);
   if (!paddleByScript.has(key)) {
-    const model = SCRIPT_MODELS[key];
+    const model = withBundled(SCRIPT_MODELS[key]);
     const svc = new PaddleOcrService({ model });
     paddleByScript.set(
       key,

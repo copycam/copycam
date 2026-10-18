@@ -17,6 +17,8 @@ CopyCam moves text you photograph — often literally passwords — from your ph
 
 **Wi-Fi QR codes are decoded on your PC.** The companion looks for a Wi-Fi QR in the photo it already receives, and returns the network name and password inside the same sealed reply. Decoding is [zxing-wasm](https://github.com/Sec-ant/zxing-wasm), running locally: its WebAssembly binary is loaded from the installed package rather than the CDN the library would otherwise fetch it from, so a scan makes no network request (verified with `fetch` and `XMLHttpRequest` disabled). The credentials are never logged — the terminal and the desktop page say only that a code was found.
 
+**What the companion connects to.** Reading runs on your PC and photos never go anywhere else. In normal use the companion makes no outbound connection: the default reading model ships inside the npm package ([NOTICE.md](NOTICE.md)). Two cases download a file once and cache it on your computer: the model for a non-default script (from `raw.githubusercontent.com` and `media.githubusercontent.com`) and, only if PaddleOCR cannot load, the tesseract.js fallback's English language data (from `cdn.jsdelivr.net`). Those are plain file requests that carry no photo and no text. A git checkout has no bundled model until you run `npm run models`, so its first scan downloads the default one too.
+
 **Server hardening** ([server/app.js](server/app.js), [server/index.js](server/index.js)):
 
 - Two listeners: HTTPS on 8787 for the browser app (self-signed, auto-generated, stored in `~/.copycam/tls.json`), and plain HTTP on 8788 for the native app and the desktop page. Both are bound to all interfaces so a phone can reach them.

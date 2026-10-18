@@ -25,3 +25,6 @@ dist-ssr
 
 # local MCP config (contains n8n API key)
 .mcp.json
+
+# OCR model files bundled into the npm package by scripts/fetch-models.mjs
+models/

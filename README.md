@@ -69,7 +69,7 @@ OCR is [PaddleOCR](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr) (PP
 CC_OCR_MODEL=cyrillic npm run serve
 ```
 
-Values: `auto` (default — the unified V6 small model), `fast` (V6 tiny: about twice as quick, misreads more), `medium` (larger still, slower), or a script — `latin`, `cyrillic`, `greek`, `arabic`, `devanagari`, `korean`, `japanese`, `thai`, `tamil`, `telugu`. Models download on first use. If PaddleOCR can't load, it falls back to tesseract.js automatically.
+Values: `auto` (default — the unified V6 small model), `fast` (V6 tiny: about twice as quick, misreads more), `medium` (larger still, slower), or a script — `latin`, `cyrillic`, `greek`, `arabic`, `devanagari`, `korean`, `japanese`, `thai`, `tamil`, `telugu`. The default model (`auto`) ships inside the npm package, so reading works with no network connection. From a git checkout, run `npm run models` to bundle it, or just scan once: it downloads and caches. Every other model downloads on first use and is cached. If PaddleOCR can't load, it falls back to tesseract.js automatically.
 
 ## Using a real (trusted) certificate
 

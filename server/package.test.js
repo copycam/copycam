@@ -37,10 +37,11 @@ describe('published package', () => {
   });
 
   it('ships the companion and the built phone app, and leaves the tests out', () => {
-    expect(pkg.files).toEqual(expect.arrayContaining(['server/', 'shared/', 'dist/', 'LICENSE']));
+    expect(pkg.files).toEqual(expect.arrayContaining(['server/', 'shared/', 'dist/', 'models/', 'licenses/', 'LICENSE', 'NOTICE.md']));
     expect(pkg.files).toContain('!**/*.test.js');
-    // the dist folder is not committed, so every pack has to build it
-    expect(pkg.scripts.prepack).toBe('npm run build');
+    // dist/ and models/ are not committed, so every pack has to produce them
+    expect(pkg.scripts.prepack).toContain('scripts/fetch-models.mjs');
+    expect(pkg.scripts.prepack).toContain('npm run build');
   });
 
   it('declares the licence that the LICENSE file carries', () => {

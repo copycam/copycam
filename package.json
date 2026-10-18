@@ -29,7 +29,10 @@
     "server/",
     "shared/",
     "dist/",
+    "models/",
+    "licenses/",
     "LICENSE",
+    "NOTICE.md",
     "SECURITY.md",
     "!**/*.test.js"
   ],
@@ -47,7 +50,8 @@
     "start": "npm run build && node server/index.js",
     "app": "npm --prefix mobile run start",
     "app:check": "cd mobile && npx tsc --noEmit",
-    "prepack": "npm run build"
+    "prepack": "node scripts/fetch-models.mjs && npm run build",
+    "models": "node scripts/fetch-models.mjs"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.3",
