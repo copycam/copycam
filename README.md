@@ -105,3 +105,11 @@ npm test            # unit, API and cross-client compatibility tests
 npm run lint
 npm run app:check   # typecheck the native app
 ```
+
+## Licence
+
+CopyCam is free software under the [GNU General Public License v3.0](LICENSE): you may use, study, change and share it, and anything you distribute that is based on it must stay open under the same licence.
+
+The licence covers the code, not the name. "CopyCam" and its logo are not licensed for use as the name of a different product, so a fork should carry its own name.
+
+The native app in [mobile/](mobile) started from the Expo template and keeps that template's [MIT licence](mobile/LICENSE) alongside this one.

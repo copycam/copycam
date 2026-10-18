@@ -1,0 +1,3 @@
+# Keep LF line endings in the working tree: the published CLI starts with a
+# shebang line, which breaks on macOS/Linux if a Windows checkout turns it into CRLF.
+* text=auto eol=lf
