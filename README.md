@@ -55,8 +55,10 @@ Pair once: the key is remembered on both sides — `~/.copycam/key.json` on the 
 
 ### Notes
 
+Something not working? See [docs/troubleshooting.md](docs/troubleshooting.md).
+
 - Windows asks to allow Node on private networks the first time — allow it.
-- The first scan downloads the OCR model (~6 MB, cached in `~/.cache/ppu-paddle-ocr`), so it needs internet once.
+- The default OCR model is bundled with the npm package. From a git checkout, the first scan downloads it (~31 MB, cached in `~/.cache/ppu-paddle-ocr`), so that needs internet once.
 - Ports: `PORT` (default 8787) is HTTPS for the browser app; `PORT+1` (8788) is plain HTTP for the native app and the desktop page. The desktop page itself only answers to this PC (loopback); the sealed API answers the LAN on both.
 - The PC's address goes into the pairing QR. Virtual adapters (WSL, Hyper-V, VirtualBox, VMware, Docker, Tailscale, ZeroTier) and self-assigned `169.254.*` addresses are passed over in favour of your real Wi-Fi/Ethernet address; if it still picks the wrong one, set `CC_IP=192.168.x.y`.
 - If the PC's address changes (DHCP), phones can't reach it until they rescan the QR. A DHCP reservation in your router stops that happening.
