@@ -9,7 +9,7 @@ CopyCam moves text you photograph — often literally passwords — from your ph
 - The key rides in the **URL fragment**, which browsers never send over the network. It exists only in the QR image and, after scanning, on the phone: in `localStorage` for the browser app (which immediately scrubs it from the address bar), or in the Keychain / Android Keystore for the native app.
 - Scanning the QR requires being physically able to see your screen. That visual channel — not the network — is how the secret is exchanged.
 
-**Every API message is sealed.** Both directions use AES-256-GCM envelopes ([shared/crypto.js](shared/crypto.js); the native app's TypeScript port is checked byte-for-byte against it by [shared/crypto-compat.test.js](shared/crypto-compat.test.js)):
+**Every API message is sealed.** Both directions use AES-256-GCM envelopes ([shared/crypto.js](shared/crypto.js); the native app's TypeScript port is checked byte-for-byte against it by that app's own tests):
 
 - Confidentiality + integrity: a Wi-Fi eavesdropper sees only ciphertext; any tampering fails the GCM tag.
 - **Authentication = key possession.** There are no accounts; a request that doesn't decrypt is rejected with no detail.
@@ -28,7 +28,7 @@ CopyCam moves text you photograph — often literally passwords — from your ph
 
 ## The native app talks cleartext, on purpose
 
-The React Native app ([mobile/](mobile)) uses the companion's **plain-HTTP**
+The upcoming React Native app uses the companion's **plain-HTTP**
 listener rather than the self-signed HTTPS one, because React Native cannot be
 told to trust that certificate and Expo Go offers no way to bypass TLS
 validation. The trade-off is different from the browser's, and better:
@@ -77,8 +77,6 @@ Checked 2026-09-16.
 `onnxruntime-node` (the OCR runtime) pulls in `adm-zip`, which has had decompression-bomb and symlink-following advisories. It has never been reachable here: `adm-zip` only unpacks onnxruntime's own trusted binaries at install time, and the app never feeds user-supplied archives to it (phone photos go straight to the OCR image pipeline). A `package.json` `overrides` entry (`adm-zip: ^0.6.0`) still keeps it on a patched line. Real OCR was re-verified after the most recent update.
 
 `zxing-wasm` (the QR decoder) ships a WebAssembly binary and pulls in two type-only packages. It runs in-process on photos you took, and reaches no network.
-
-**Native app** (`mobile/`): `npm audit` reports 10 moderate findings, which all trace to a single advisory — `uuid`'s missing buffer bounds check when a caller supplies its own buffer (v3/v5/v6) — reached only through Expo's CLI and native-project tooling (`@expo/cli`, `@expo/config`, `xcode`). None of it is in the JavaScript bundle that runs on the phone, and the app never calls `uuid`. npm's suggested "fix" is downgrading to Expo SDK 46, which Expo Go can't run; the real fix is Expo updating its tooling in a later SDK 57 patch.
 
 ## Reporting
 

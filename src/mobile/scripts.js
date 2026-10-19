@@ -1,5 +1,5 @@
-// Kept in its own module so the native app's copy (mobile/src/lib/scripts.ts)
-// can be checked against it — see shared/scripts-compat.test.js.
+// Kept in its own module so the native app's copy
+// can be checked against it — see that app's own tests.
 //
 // Recognition scripts. There is no real script *detection* here — "Latin +
 // CJK" is a fixed model, not a classifier, so it reads Arabic/Cyrillic/etc as

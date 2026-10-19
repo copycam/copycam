@@ -4,8 +4,8 @@
 //
 //   screen = layer * z + t
 //
-// The native app keeps an identical copy (mobile/src/lib/view.ts); the two are
-// held together by shared/selection-compat.test.js.
+// The native app keeps an identical copy; the two are
+// held together by that app's own tests.
 //
 // Margins ({ x, top, bottom }) say how close the photo may come to each edge of
 // the review area. `top` clears the buttons laid over the photo, so a zoomed

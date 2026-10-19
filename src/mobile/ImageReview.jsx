@@ -25,7 +25,7 @@ const TOP_BAR = 20 + PILL_H + 16;
 // fingers zoom and pan the photo; a double tap zooms in or back out.
 // The bottom sheet swipes up to preview exactly what will be sent, and the
 // text can be edited before sending — the same behaviour as the native app's
-// review (mobile/src/screens/ReviewScreen.tsx).
+// review.
 export default function ImageReview({ photo, words, wifi = null, pcName, sending, sendError = null, onSend, onRetake }) {
   const containerRef = useRef(null);
   const sheetDrag = useRef(null);

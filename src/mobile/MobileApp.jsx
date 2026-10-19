@@ -8,7 +8,7 @@ import { SCRIPTS, scriptLabel } from './scripts.js';
 const ACC = '#CFFF3B';
 
 // What each failure tells the user — the same wording and the same ways out as
-// the native app (mobile/App.tsx), so the two clients stay one product.
+// the native app, so the two clients stay one product.
 const COPY = {
   unreachable:
     'Check CopyCam is still running on your computer and that both are on the same Wi-Fi. If its address changed, rescanning the QR it shows always re-links.',

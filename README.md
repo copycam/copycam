@@ -2,14 +2,13 @@
 
 Point your phone at any text. It lands on your computer's clipboard, over Wi-Fi. Nothing else.
 
-This repo contains the whole product:
+This repo contains the desktop companion, the browser phone app and the landing page:
 
 - **Desktop companion** ([server/](server)) — a small Node server you run on your PC. Runs OCR ([PaddleOCR models on ONNX Runtime](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr), no Python), writes received text to the clipboard, shows the pairing QR, and serves the browser app.
 - **Phone app, browser** ([mobile.html](mobile.html) + [src/mobile/](src/mobile)) — zero install. Scan the pairing QR with the phone's camera and it opens in the browser.
-- **Phone app, native** ([mobile/](mobile)) — React Native + TypeScript (Expo), runs free in Expo Go. Scans the pairing QR in-app, keeps the key in the Keychain / Keystore, and can drive the iPhone's flash. See [mobile/README.md](mobile/README.md).
 - **Landing page + interactive demo** ([index.html](index.html) + [src/App.jsx](src/App.jsx)) — the marketing page, ported from the original Claude Design prototype.
 
-Both phone apps speak the same encrypted protocol to the same companion and offer the same features, so either works.
+A native iPhone and Android app is coming soon. It will speak the same encrypted protocol to the same companion.
 
 ## Use it
 
@@ -18,10 +17,9 @@ npm install
 npm start        # builds the web assets, then starts the companion
 ```
 
-`npm start` prints a pairing QR (also shown at http://localhost:8788/desktop). Then pick a phone app — the phone must be on the same Wi-Fi:
+`npm start` prints a pairing QR (also shown at http://localhost:8788/desktop). Then, on a phone on the same Wi-Fi:
 
 - **Browser, nothing to install.** Scan the QR with the phone's camera and open the link. The first connect shows a one-time "not private" warning — that's CopyCam's own self-signed certificate (it's what makes iOS HTTPS-Only mode work): tap Show Details / Advanced → Visit Website.
-- **Native app, in Expo Go.** Run `npm run app`, sign in to the same Expo account on the PC and in Expo Go, scan the Expo QR to load the app, then scan the pairing QR from inside it. Details in [mobile/README.md](mobile/README.md).
 
 ### Scanning
 
@@ -47,11 +45,11 @@ There is no real script *detection*: the default **Latin + CJK** option is a fix
 
 ### Flash
 
-The native app switches the phone's flash on, on iPhone and Android. In the browser, a Flash pill appears only where the browser allows it (Android Chrome); iOS Safari never lets a web page control the torch, so there the browser app offers a shortcut to the system camera, which has its own flash.
+In the browser, a Flash pill appears only where the browser allows it (Android Chrome); iOS Safari never lets a web page control the torch, so there the browser app offers a shortcut to the system camera, which has its own flash.
 
 ### Pairing
 
-Pair once: the key is remembered on both sides — `~/.copycam/key.json` on the PC; `localStorage` in the browser app; the Keychain / Keystore in the native app. Rotate it any time with `npm run serve -- --reset`; paired phones then need to rescan.
+Pair once: the key is remembered on both sides — `~/.copycam/key.json` on the PC; `localStorage` in the browser app. Rotate it any time with `npm run serve -- --reset`; paired phones then need to rescan.
 
 ### Notes
 
@@ -59,7 +57,7 @@ Something not working? See [docs/troubleshooting.md](docs/troubleshooting.md).
 
 - Windows asks to allow Node on private networks the first time — allow it.
 - The default OCR model is bundled with the npm package. From a git checkout, the first scan downloads it (~31 MB, cached in `~/.cache/ppu-paddle-ocr`), so that needs internet once.
-- Ports: `PORT` (default 8787) is HTTPS for the browser app; `PORT+1` (8788) is plain HTTP for the native app and the desktop page. The desktop page itself only answers to this PC (loopback); the sealed API answers the LAN on both.
+- Ports: `PORT` (default 8787) is HTTPS for the browser app; `PORT+1` (8788) is plain HTTP for the desktop page and the coming native app. The desktop page itself only answers to this PC (loopback); the sealed API answers the LAN on both.
 - The PC's address goes into the pairing QR. Virtual adapters (WSL, Hyper-V, VirtualBox, VMware, Docker, Tailscale, ZeroTier) and self-assigned `169.254.*` addresses are passed over in favour of your real Wi-Fi/Ethernet address; if it still picks the wrong one, set `CC_IP=192.168.x.y`.
 - If the PC's address changes (DHCP), phones can't reach it until they rescan the QR. A DHCP reservation in your router stops that happening.
 
@@ -83,7 +81,7 @@ Out of the box CopyCam self-signs, which triggers a one-time warning in the phon
   TLS_CERT_FILE=path\to\fullchain.pem TLS_KEY_FILE=path\to\privkey.pem CC_DOMAIN=copycam.example.com npm run serve
   ```
 
-`CC_DOMAIN` puts the domain in the QR URL and the request allow-list (on both ports, so the native app keeps working) so it matches the certificate. The startup log shows which certificate source is active. The native app doesn't use the certificate at all — see [mobile/README.md](mobile/README.md) for why.
+`CC_DOMAIN` puts the domain in the QR URL and the request allow-list (on both ports) so it matches the certificate. The startup log shows which certificate source is active. The coming native app won't use the certificate at all — see [SECURITY.md](SECURITY.md#the-native-app-talks-cleartext-on-purpose) for why.
 
 ## What it can't read
 
@@ -102,10 +100,8 @@ Every payload between phone and PC is end-to-end encrypted (AES-256-GCM) with a 
 ```
 npm run dev         # landing page + demo (Vite)
 npm run serve       # start the companion without rebuilding
-npm run app         # native app dev server (Expo)
 npm test            # unit, API and cross-client compatibility tests
 npm run lint
-npm run app:check   # typecheck the native app
 ```
 
 ## Licence
@@ -114,4 +110,3 @@ CopyCam is free software under the [GNU General Public License v3.0](LICENSE): y
 
 The licence covers the code, not the name. "CopyCam" and its logo are not licensed for use as the name of a different product, so a fork should carry its own name.
 
-The native app in [mobile/](mobile) started from the Expo template and keeps that template's [MIT licence](mobile/LICENSE) alongside this one.

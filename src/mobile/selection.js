@@ -1,5 +1,5 @@
 // Pure selection logic for the image-overlay review, kept identical to the
-// native app's (mobile/src/lib/selection.ts) by shared/selection-compat.test.js.
+// native app's by that app's own tests.
 //
 // Each item is a word ({ t, x, y, w, h, li, pi }) in reading order. The server
 // already puts RTL lines in reading order (reversing both the characters within

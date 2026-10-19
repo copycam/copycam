@@ -35,7 +35,7 @@ export function forgetKey() {
   localStorage.removeItem(KEY_STORAGE);
 }
 
-// The same failure handling as the native client (mobile/src/lib/api.ts), so
+// The same failure handling as the native client, so
 // the two phone apps behave alike when the network misbehaves.
 //
 // How long each call may take. A scan uploads a photo and runs OCR; a hello is

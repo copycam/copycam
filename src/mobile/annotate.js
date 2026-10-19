@@ -4,8 +4,8 @@
 // and the server's cleanup is: wrong spacing, and look-alike characters inside
 // passwords and codes (0 vs O, 1 vs l, 5 vs S).
 //
-// The native app keeps an identical copy (mobile/src/lib/annotate.ts); they are
-// held together by shared/annotate-compat.test.js.
+// The native app keeps an identical copy; they are
+// held together by that app's own tests.
 
 // Characters with a twin that reads the same to a human skimming, and that a
 // recogniser genuinely confuses. Marked only inside code-like text: in an
