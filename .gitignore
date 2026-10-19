@@ -28,3 +28,6 @@ dist-ssr
 
 # OCR model files bundled into the npm package by scripts/fetch-models.mjs
 models/
+
+# the public website build (npm run build:site)
+dist-site/

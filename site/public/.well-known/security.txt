@@ -1,0 +1,5 @@
+Contact: mailto:hello@copycam.app
+Expires: 2027-10-19T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://copycam.app/.well-known/security.txt
+Policy: https://github.com/copycam/copycam/blob/main/SECURITY.md
