@@ -37,7 +37,7 @@ describe('published package', () => {
   });
 
   it('ships the companion and the built phone app, and leaves the tests out', () => {
-    expect(pkg.files).toEqual(expect.arrayContaining(['server/', 'shared/', 'dist/', 'models/', 'licenses/', 'LICENSE', 'NOTICE.md']));
+    expect(pkg.files).toEqual(expect.arrayContaining(['server/', 'shared/', 'dist/', 'models/', 'licenses/', 'LICENSE', 'NOTICE.md', 'THIRD_PARTY_NOTICES.md']));
     expect(pkg.files).toContain('!**/*.test.js');
     // dist/ and models/ are not committed, so every pack has to produce them
     expect(pkg.scripts.prepack).toContain('scripts/fetch-models.mjs');

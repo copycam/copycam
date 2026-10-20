@@ -28,6 +28,9 @@ describe('App', () => {
     expect(within(get).getByText('npx copycam')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
     expect(screen.getByText('No ads. Not a single one.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy/');
+    expect(screen.getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms/');
+    expect(screen.getByRole('link', { name: 'Licences' })).toHaveAttribute('href', '/licenses/');
     expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/copycam/copycam');
     expect(screen.getByRole('link', { name: 'Troubleshooting' }).getAttribute('href').endsWith('docs/troubleshooting.md')).toBe(true);
   });

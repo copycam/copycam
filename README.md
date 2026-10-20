@@ -110,3 +110,4 @@ CopyCam is free software under the [GNU General Public License v3.0](LICENSE): y
 
 The licence covers the code, not the name. "CopyCam" and its logo are not licensed for use as the name of a different product, so a fork should carry its own name.
 
+The [privacy policy](https://copycam.app/privacy/), [terms of use](https://copycam.app/terms/) and [third-party licences](https://copycam.app/licenses/) are on the website, and their sources are in [docs/legal](docs/legal) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

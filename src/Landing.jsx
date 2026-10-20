@@ -175,6 +175,9 @@ export function Footer() {
         <a style={link} href={REPO}>GitHub</a>
         <a style={link} href={HELP}>Help</a>
         <a style={link} href={`${REPO}/blob/main/SECURITY.md`}>Security</a>
+        <a style={link} href="/privacy/">Privacy</a>
+        <a style={link} href="/terms/">Terms</a>
+        <a style={link} href="/licenses/">Licences</a>
         <a style={link} href="mailto:hello@copycam.app">hello@copycam.app</a>
         <span style={{ marginLeft: 'auto' }}>CopyCam · GPL-3.0</span>
       </div>
