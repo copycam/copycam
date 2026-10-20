@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import App from './App.jsx';
 
 describe('App', () => {
@@ -16,14 +16,16 @@ describe('App', () => {
   it('renders the demo inside the device frame starting on the pair screen', () => {
     render(<App />);
     expect(screen.getByText('PAIR ONCE')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /simulate desktop scan/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /point at the qr code/i })).toBeInTheDocument();
   });
 
   it('tells a visitor how to get it, and links to the code and the help', () => {
     render(<App />);
     expect(screen.getByRole('link', { name: /get copycam/i })).toHaveAttribute('href', '#get');
     expect(screen.getByRole('heading', { name: 'Get CopyCam' }).closest('section')).toHaveAttribute('id', 'get');
-    expect(screen.getByText('npx copycam')).toBeInTheDocument();
+    // the demo's pairing screen shows the command too, so look inside the Get CopyCam section
+    const get = screen.getByRole('heading', { name: 'Get CopyCam' }).closest('section');
+    expect(within(get).getByText('npx copycam')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
     expect(screen.getByText('No ads. Not a single one.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/copycam/copycam');

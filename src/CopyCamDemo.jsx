@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { beginStroke, everything, NOTHING, selectionText, strokeTo } from './mobile/selection.js';
+import { annotate } from './mobile/annotate.js';
 
-const INITIAL_BLOCKS = [
-  { text: 'SSID: HOMEBASE_5G', sel: true },
-  { text: 'Pass: corgi-battery-42', sel: true },
-  { text: 'Guest: welcome-123', sel: true },
+// The label the demo "photographs". Its words are selectable exactly as in the
+// real phone app: that app's own selection and look-alike modules drive this
+// demo, so a drag, the suggestion and the marks all behave the same way.
+const LINES = [
+  ['Network:', 'HOMEBASE_5G'],
+  ['Password:', 'K7mq-Rv2p-90lx'],
+  ['Guest:', 'welcome-123'],
 ];
+const WORDS = LINES.flatMap((line, li) => line.map((t) => ({ t, li, pi: li })));
+// the word index of each word, by line, for drawing
+const INDEX = LINES.map((line, li) => line.map((_, k) => LINES.slice(0, li).reduce((n, l) => n + l.length, 0) + k));
+
+const MONO = 'ui-monospace,Menlo,monospace';
 
 function drawFakeQr(canvas) {
   const ctx = canvas.getContext('2d');
@@ -59,15 +69,28 @@ function useBeep() {
   }, []);
 }
 
-// Interactive CopyCam demo screen: pair -> connecting -> idle -> scanning -> review -> sending -> sent.
-// Ported from the CopyCam design's embedded DC component logic.
+// The word under a pointer event. In a browser the point is looked up; where
+// that isn't available (a test DOM) the event's own target stands in.
+function wordFromEvent(e) {
+  const hit = typeof document.elementFromPoint === 'function' ? document.elementFromPoint(e.clientX, e.clientY) : null;
+  const el = (hit ?? e.target)?.closest?.('[data-w]');
+  return el ? Number(el.dataset.w) : null;
+}
+
+// Interactive CopyCam demo screen:
+// pair -> connecting -> idle -> scanning -> review -> sending -> sent.
+// Ported from the CopyCam design's embedded DC component logic, then brought in
+// line with the real app: the QR is on the computer and the phone scans it, and
+// the review is drag-to-select with look-alike marks and a preview of exactly
+// what will be sent.
 export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My MacBook', autoSend = false, onPulse }) {
   const [phase, setPhase] = useState('pair');
-  const [blocks, setBlocks] = useState(INITIAL_BLOCKS);
+  const [sel, setSel] = useState(() => everything(WORDS.length, true));
   // Timers fire several steps later, after multiple renders — refs keep the
-  // guard checks below reading the current phase/blocks instead of a stale closure.
+  // guard checks below reading the current phase/selection instead of a stale closure.
   const phaseRef = useRef(phase);
-  const blocksRef = useRef(blocks);
+  const selRef = useRef(sel);
+  const strokeRef = useRef(null);
   const canvasRef = useRef(null);
   const qrDrawn = useRef(false);
   const pairTimer = useRef(null);
@@ -81,13 +104,11 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
     phaseRef.current = p;
     setPhase(p);
   };
-  const updateBlocks = (updater) => {
-    setBlocks((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      blocksRef.current = next;
-      return next;
-    });
+  const updateSel = (next) => {
+    selRef.current = next;
+    setSel(next);
   };
+  const resetSel = () => updateSel(everything(WORDS.length, true));
 
   useEffect(() => {
     if (canvasRef.current && !qrDrawn.current) {
@@ -121,6 +142,8 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
     }, 1500);
   };
 
+  const hasText = () => selectionText(WORDS, selRef.current.picked).trim().length > 0;
+
   const scan = () => {
     if (phaseRef.current !== 'idle') return;
     beep(520);
@@ -133,14 +156,37 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
     }, 1600);
   };
 
-  const toggle = (i) => {
+  // One stroke is a drag across words, or a tap, which is a drag that never
+  // left its word: the first replaces the suggestion, later ones add to it, and
+  // one that starts on a picked word takes words away.
+  const onPointerDown = (e) => {
     if (phaseRef.current !== 'review') return;
-    updateBlocks((prev) => prev.map((b, j) => (j === i ? { ...b, sel: !b.sel } : b)));
+    const i = wordFromEvent(e);
+    if (i == null) return;
+    try {
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    } catch {
+      // a synthetic pointer can't be captured; the drag still works without
+    }
+    const stroke = beginStroke(selRef.current, i);
+    strokeRef.current = { stroke, last: i };
+    updateSel(strokeTo(stroke, i));
+  };
+  const onPointerMove = (e) => {
+    const s = strokeRef.current;
+    if (!s) return;
+    const i = wordFromEvent(e);
+    if (i == null || i === s.last) return;
+    s.last = i;
+    updateSel(strokeTo(s.stroke, i));
+  };
+  const endStroke = () => {
+    strokeRef.current = null;
   };
 
   const send = () => {
     if (phaseRef.current !== 'review') return;
-    if (!blocksRef.current.some((b) => b.sel)) return;
+    if (!hasText()) return;
     updatePhase('sending');
     sendTimer.current = setTimeout(() => {
       haptic();
@@ -148,25 +194,43 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
       updatePhase('sent');
       resetTimer.current = setTimeout(() => {
         updatePhase('idle');
-        updateBlocks((prev) => prev.map((b) => ({ ...b, sel: true })));
+        resetSel();
       }, 2300);
     }, 900);
   };
 
-  const rescan = () => {
+  const retake = () => {
     clearTimeout(sendTimer.current);
     clearTimeout(resetTimer.current);
     updatePhase('idle');
-    updateBlocks((prev) => prev.map((b) => ({ ...b, sel: true })));
+    resetSel();
   };
 
   const review = phase === 'review' || phase === 'sending';
   const sending = phase === 'sending';
   const showPair = phase === 'pair' || phase === 'connecting';
   const showCam = !showPair;
-  const n = blocks.filter((b) => b.sel).length;
-  const sendLabel = sending ? 'Sending…' : n === 0 ? 'Select text to send' : `Send ${n} ${n === 1 ? 'block' : 'blocks'} → ${deviceName}`;
+  const text = selectionText(WORDS, sel.picked);
+  const canSend = text.trim().length > 0;
+  const n = sel.picked.length;
+  const marks = annotate(text);
+  const doubtful = marks.some((m) => m.mark === 'risky');
+  const status = n === 0 ? 'Nothing selected' : sel.soft ? 'All text · tap or drag to choose' : `${n} word${n === 1 ? '' : 's'} selected`;
   const sheetY = review ? '0%' : '112%';
+
+  const chip = {
+    border: 'none',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: '#fff',
+    background: 'rgba(20,21,24,.6)',
+    backdropFilter: 'blur(10px)',
+    borderRadius: 999,
+    padding: '7px 13px',
+    boxShadow: 'inset 0 0 0 .5px rgba(255,255,255,.16)',
+  };
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
@@ -181,18 +245,30 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
             alignItems: 'center',
             justifyContent: 'center',
             gap: 22,
-            padding: '0 36px',
+            padding: '0 32px',
             textAlign: 'center',
           }}
         >
-          <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11, fontWeight: 700, letterSpacing: 2, color: '#9a9a92' }}>
-            PAIR ONCE
+          <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: 2, color: '#9a9a92' }}>PAIR ONCE</div>
+
+          {/* what the computer shows: the command, then the code to scan */}
+          <div style={{ width: 214, background: '#fff', borderRadius: 16, boxShadow: '0 2px 14px rgba(0,0,0,.07),0 0 0 1px rgba(0,0,0,.05)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 12px', background: '#F1F0EC' }}>
+              {[0, 1, 2].map((i) => (
+                <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#d6d5ce' }} />
+              ))}
+              <span style={{ marginLeft: 6, fontSize: 10.5, color: '#9a9a92', fontWeight: 600 }}>{deviceName}</span>
+            </div>
+            <div style={{ padding: '14px 14px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <div style={{ alignSelf: 'flex-start', fontFamily: MONO, fontSize: 12.5, color: '#26261f' }}>
+                <span style={{ color: '#9a9a92' }}>$ </span>npx copycam
+              </div>
+              <canvas ref={canvasRef} width={200} height={200} style={{ width: 138, height: 138, display: 'block', imageRendering: 'pixelated' }} />
+            </div>
           </div>
-          <div style={{ background: '#fff', borderRadius: 24, padding: 20, boxShadow: '0 2px 14px rgba(0,0,0,.07),0 0 0 1px rgba(0,0,0,.05)' }}>
-            <canvas ref={canvasRef} width={200} height={200} style={{ width: 172, height: 172, display: 'block', imageRendering: 'pixelated' }} />
-          </div>
-          <div style={{ fontSize: 14.5, lineHeight: 1.5, color: '#55554f', maxWidth: 250 }}>
-            Open <b style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 13 }}>copycam.app/link</b> on your computer and scan this code. Same
+
+          <div style={{ fontSize: 14.5, lineHeight: 1.5, color: '#55554f', maxWidth: 270 }}>
+            On your computer, run <b style={{ fontFamily: MONO, fontSize: 13 }}>npx copycam</b>. Point your phone at the QR code it shows. Same
             Wi‑Fi, no account.
           </div>
           {phase === 'connecting' && (
@@ -212,30 +288,22 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
             </div>
           )}
           {phase === 'pair' && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#9a9a92' }}>
-                Waiting for scan
-                <span style={{ animation: 'ccDot 1.2s infinite' }}>&bull;</span>
-                <span style={{ animation: 'ccDot 1.2s .2s infinite' }}>&bull;</span>
-                <span style={{ animation: 'ccDot 1.2s .4s infinite' }}>&bull;</span>
-              </div>
-              <button
-                onClick={startPair}
-                style={{
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: '#161616',
-                  color: '#fff',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  padding: '13px 22px',
-                  borderRadius: 999,
-                  fontFamily: 'inherit',
-                }}
-              >
-                Simulate desktop scan →
-              </button>
-            </div>
+            <button
+              onClick={startPair}
+              style={{
+                border: 'none',
+                cursor: 'pointer',
+                background: '#161616',
+                color: '#fff',
+                fontSize: 14,
+                fontWeight: 600,
+                padding: '13px 22px',
+                borderRadius: 999,
+                fontFamily: 'inherit',
+              }}
+            >
+              Point at the QR code →
+            </button>
           )}
         </div>
       )}
@@ -254,6 +322,10 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
             }}
           />
           <div
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={endStroke}
+            onPointerCancel={endStroke}
             style={{
               position: 'absolute',
               left: '50%',
@@ -264,30 +336,38 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
               borderRadius: 10,
               padding: '18px 20px',
               boxShadow: '0 18px 40px rgba(0,0,0,.5)',
+              touchAction: review ? 'none' : 'auto',
+              cursor: review ? 'text' : 'default',
+              userSelect: 'none',
             }}
           >
-            <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 9.5, fontWeight: 700, letterSpacing: 2, color: '#a6a49c', marginBottom: 10 }}>
+            <div style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: 2, color: '#a6a49c', marginBottom: 10 }}>
               WIRELESS ROUTER — UNIT 04
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-              {blocks.map((b, i) => (
-                <div
-                  key={i}
-                  style={
-                    review
-                      ? {
-                          padding: '1px 6px',
-                          margin: '0 -6px',
-                          borderRadius: 6,
-                          transition: 'all .25s',
-                          background: b.sel ? `color-mix(in srgb, ${accentColor} 30%, transparent)` : undefined,
-                          boxShadow: b.sel ? `0 0 0 1.5px ${accentColor}` : '0 0 0 1.5px rgba(0,0,0,.16)',
-                          opacity: b.sel ? 1 : 0.45,
-                        }
-                      : { padding: '1px 6px', margin: '0 -6px', borderRadius: 6, transition: 'all .25s' }
-                  }
-                >
-                  <span style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 12.5, color: '#26261f', whiteSpace: 'nowrap' }}>{b.text}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+              {LINES.map((line, li) => (
+                <div key={li} style={{ fontFamily: MONO, fontSize: 12.5, color: '#26261f', whiteSpace: 'nowrap' }}>
+                  {line.map((t, k) => {
+                    const i = INDEX[li][k];
+                    const picked = review && sel.picked.includes(i);
+                    return (
+                      <span key={i}>
+                        {k > 0 && ' '}
+                        <span
+                          data-w={i}
+                          style={{
+                            padding: '2px 3px',
+                            margin: '0 -3px',
+                            borderRadius: 4,
+                            transition: 'background .2s',
+                            background: picked ? `color-mix(in srgb, ${accentColor} 45%, transparent)` : 'transparent',
+                          }}
+                        >
+                          {t}
+                        </span>
+                      </span>
+                    );
+                  })}
                 </div>
               ))}
             </div>
@@ -302,10 +382,10 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
             />
           </div>
           <div style={{ position: 'absolute', inset: 0, boxShadow: 'inset 0 0 120px rgba(0,0,0,.55)', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', left: 26, top: 120, width: 26, height: 26, borderLeft: '3px solid rgba(255,255,255,.75)', borderTop: '3px solid rgba(255,255,255,.75)', borderRadius: '4px 0 0 0' }} />
-          <div style={{ position: 'absolute', right: 26, top: 120, width: 26, height: 26, borderRight: '3px solid rgba(255,255,255,.75)', borderTop: '3px solid rgba(255,255,255,.75)', borderRadius: '0 4px 0 0' }} />
-          <div style={{ position: 'absolute', left: 26, bottom: 170, width: 26, height: 26, borderLeft: '3px solid rgba(255,255,255,.75)', borderBottom: '3px solid rgba(255,255,255,.75)', borderRadius: '0 0 0 4px' }} />
-          <div style={{ position: 'absolute', right: 26, bottom: 170, width: 26, height: 26, borderRight: '3px solid rgba(255,255,255,.75)', borderBottom: '3px solid rgba(255,255,255,.75)', borderRadius: '0 0 4px 0' }} />
+          <div style={{ position: 'absolute', left: 26, top: 120, width: 26, height: 26, borderLeft: '3px solid rgba(255,255,255,.75)', borderTop: '3px solid rgba(255,255,255,.75)', borderRadius: '4px 0 0 0', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', right: 26, top: 120, width: 26, height: 26, borderRight: '3px solid rgba(255,255,255,.75)', borderTop: '3px solid rgba(255,255,255,.75)', borderRadius: '0 4px 0 0', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', left: 26, bottom: 170, width: 26, height: 26, borderLeft: '3px solid rgba(255,255,255,.75)', borderBottom: '3px solid rgba(255,255,255,.75)', borderRadius: '0 0 0 4px', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', right: 26, bottom: 170, width: 26, height: 26, borderRight: '3px solid rgba(255,255,255,.75)', borderBottom: '3px solid rgba(255,255,255,.75)', borderRadius: '0 0 4px 0', pointerEvents: 'none' }} />
 
           {phase === 'scanning' && (
             <div
@@ -319,6 +399,7 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
                 boxShadow: `0 0 22px 4px ${accentColor}`,
                 animation: 'ccSweep 1.4s ease-in-out infinite alternate',
                 top: '8%',
+                pointerEvents: 'none',
               }}
             />
           )}
@@ -347,9 +428,25 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
             {deviceName} — linked
           </div>
 
+          {review && (
+            <div style={{ position: 'absolute', top: 154, left: 20, right: 20, display: 'flex', justifyContent: 'space-between' }}>
+              <button onClick={retake} disabled={sending} style={chip}>
+                Retake
+              </button>
+              <span style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => updateSel(everything(WORDS.length))} disabled={sending} style={chip}>
+                  All
+                </button>
+                <button onClick={() => updateSel(NOTHING)} disabled={sending} style={chip}>
+                  Clear
+                </button>
+              </span>
+            </div>
+          )}
+
           {phase === 'idle' && (
             <div style={{ position: 'absolute', bottom: 186, left: 0, right: 0, textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,.65)' }}>
-              Frame the text, then tap
+              Frame the text, then tap the shutter
             </div>
           )}
 
@@ -384,84 +481,82 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
               bottom: 0,
               background: '#FAFAF7',
               borderRadius: '28px 28px 0 0',
-              padding: '14px 20px 40px',
+              padding: '14px 18px 34px',
               transform: `translateY(${sheetY})`,
               transition: 'transform .5s cubic-bezier(.32,.72,.25,1)',
               boxShadow: '0 -8px 40px rgba(0,0,0,.35)',
             }}
           >
-            <div style={{ width: 38, height: 5, borderRadius: 3, background: 'rgba(0,0,0,.14)', margin: '0 auto 14px' }} />
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#161616' }}>{blocks.length} text blocks found</div>
-              <button
-                onClick={rescan}
-                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#8a8a82', fontFamily: 'inherit', padding: 4 }}
-              >
-                Rescan
-              </button>
+            <div style={{ width: 44, height: 5, borderRadius: 3, background: 'rgba(0,0,0,.18)', margin: '0 auto 12px' }} />
+            <div style={{ fontSize: 13, fontWeight: 600, color: n === 0 ? '#b0afa8' : '#8a8a82', marginBottom: 9 }}>{status}</div>
+            <div
+              data-testid="preview"
+              aria-label={text}
+              style={{
+                minHeight: 88,
+                padding: '10px 12px',
+                background: '#fff',
+                borderRadius: 12,
+                boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.06)',
+                fontFamily: MONO,
+                fontSize: 13,
+                lineHeight: 1.5,
+                color: '#26261f',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                boxSizing: 'border-box',
+              }}
+            >
+              {text.length === 0 ? (
+                <span style={{ color: '#b0afa8' }}>Drag across the photo to select text.</span>
+              ) : (
+                marks.map((seg, i) =>
+                  seg.mark === 'risky' ? (
+                    <span
+                      key={i}
+                      style={{ textDecoration: 'underline dotted', textDecorationColor: '#c08a00', textUnderlineOffset: 3, background: 'rgba(207,255,59,.28)', borderRadius: 3 }}
+                    >
+                      {seg.t}
+                    </span>
+                  ) : seg.mark === 'space' ? (
+                    <span key={i} style={{ color: '#c9c8c1' }} aria-hidden="true">
+                      {'·'.repeat(seg.t.length)}
+                    </span>
+                  ) : (
+                    <span key={i}>{seg.t}</span>
+                  ),
+                )
+              )}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 14 }}>
-              {blocks.map((b, i) => (
-                <div
-                  key={i}
-                  onClick={() => toggle(i)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '10px 12px',
-                    borderRadius: 12,
-                    cursor: 'pointer',
-                    background: b.sel ? 'rgba(0,0,0,.045)' : 'transparent',
-                    opacity: b.sel ? 1 : 0.5,
-                    transition: 'all .2s',
-                    userSelect: 'none',
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 11,
-                      flex: 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 12,
-                      fontWeight: 800,
-                      transition: 'all .2s',
-                      background: b.sel ? accentColor : 'transparent',
-                      color: b.sel ? '#161616' : 'transparent',
-                      border: b.sel ? `1.5px solid ${accentColor}` : '1.5px solid rgba(0,0,0,.22)',
-                    }}
-                  >
-                    ✓
-                  </span>
-                  <span style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 13, color: '#26261f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {b.text}
-                  </span>
-                </div>
-              ))}
+            <div style={{ minHeight: 30, fontSize: 12, lineHeight: 1.4, color: '#8a8a82', padding: '7px 2px 9px' }}>
+              {doubtful ? 'Look-alikes like 0 and O are underlined. Check them before you send.' : ''}
             </div>
             <button
               onClick={send}
-              disabled={n === 0}
+              disabled={!canSend || sending}
               style={{
                 width: '100%',
                 border: 'none',
-                cursor: n === 0 ? 'default' : 'pointer',
+                cursor: canSend && !sending ? 'pointer' : 'default',
                 borderRadius: 999,
                 padding: '15px 20px',
                 fontSize: 15,
                 fontWeight: 700,
                 fontFamily: 'inherit',
                 transition: 'all .2s',
-                background: n === 0 ? 'rgba(0,0,0,.08)' : sending ? '#161616' : accentColor,
-                color: n === 0 ? 'rgba(0,0,0,.35)' : sending ? '#fff' : '#161616',
+                background: sending ? '#161616' : !canSend ? 'rgba(0,0,0,.08)' : accentColor,
+                color: sending ? '#fff' : !canSend ? 'rgba(0,0,0,.35)' : '#161616',
               }}
             >
-              {sendLabel}
+              {sending ? 'Sending…' : !canSend ? 'Select text to send' : `Send to ${deviceName}`}
             </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 9, fontFamily: MONO, fontSize: 11, color: '#9a9a92' }}>
+              <svg width="10" height="12" viewBox="0 0 10 12" style={{ flex: 'none' }} aria-hidden="true">
+                <rect x="0.75" y="5" width="8.5" height="6.25" rx="1.5" fill="none" stroke="#9a9a92" strokeWidth="1.5" />
+                <path d="M2.5 5V3.5a2.5 2.5 0 015 0V5" fill="none" stroke="#9a9a92" strokeWidth="1.5" />
+              </svg>
+              end-to-end encrypted
+            </div>
           </div>
 
           {phase === 'sent' && (
