@@ -32,6 +32,7 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms/');
     expect(screen.getByRole('link', { name: 'Licences' })).toHaveAttribute('href', '/licenses/');
     expect(screen.getByRole('link', { name: 'Accessibility' })).toHaveAttribute('href', '/accessibility/');
+    expect(screen.getByRole('link', { name: 'הצהרת נגישות' })).toHaveAttribute('href', '/he/accessibility/');
     // the logo is the page's one top-level heading
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/^CopyCam$/);
     expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/copycam/copycam');

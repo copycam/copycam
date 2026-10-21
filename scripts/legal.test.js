@@ -23,6 +23,21 @@ describe('legal pages', () => {
     }
   });
 
+  it('builds the Hebrew accessibility statement right-to-left, linked to the English one', () => {
+    out = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-legal-'));
+    buildLegal({ outDir: out });
+    const he = fs.readFileSync(path.join(out, 'he', 'accessibility', 'index.html'), 'utf8');
+    expect(he).toContain('<html lang="he" dir="rtl">');
+    expect(he).toContain('<title>הצהרת נגישות · CopyCam</title>');
+    expect(he).toContain('hreflang="en" href="https://copycam.app/accessibility/"');
+    const en = fs.readFileSync(path.join(out, 'accessibility', 'index.html'), 'utf8');
+    expect(en).toContain('<html lang="en" dir="ltr">');
+    expect(en).toContain('hreflang="he" href="https://copycam.app/he/accessibility/"');
+    // both statements name the same contact, so neither can drift from the other
+    expect(he).toContain('hello@copycam.app');
+    expect(en).toContain('hello@copycam.app');
+  });
+
   it('pages carry no scripts and load nothing from other sites, so the strict CSP holds', () => {
     out = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-legal-'));
     buildLegal({ outDir: out });

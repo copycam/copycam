@@ -18,8 +18,13 @@ This website aims to meet Israeli Standard 5568, which is based on the Web Conte
 - Nothing flashes.
 - The privacy, terms, licence and accessibility pages follow your device's light or dark setting.
 
+## How it was tested
+
+I checked by hand in Chrome, on a computer and in phone view: keyboard navigation, focus outlines, contrast and zoom. The site has not yet been tested thoroughly with screen readers such as NVDA or VoiceOver.
+
 ## Known limitations
 
+- The website's content is in English only, apart from the Hebrew version of this statement.
 - In the interactive demo, picking words by dragging across the photo needs a mouse or a touch screen. With a keyboard, use All and Clear to choose what to send, then Send.
 - The demo imitates a phone screen. The writing on its pictured router label is part of that picture.
 - The CopyCam phone app (the page your computer serves to your phone) also picks words by dragging. Its Edit button lets you type or correct the text instead.
@@ -28,3 +33,5 @@ This website aims to meet Israeli Standard 5568, which is based on the Web Conte
 ## Tell me about a problem
 
 If something on this site or in CopyCam is hard to use, please tell me which page, what you were trying to do, and the device, browser and any assistive technology you use. I'm the accessibility contact: Safi Hazzan, [hello@copycam.app](mailto:hello@copycam.app). I'll reply as soon as I can, usually within a few days.
+
+This statement is also available in Hebrew: [הצהרת נגישות](/he/accessibility/).

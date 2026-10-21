@@ -13,7 +13,8 @@ export const PAGES = [
   { slug: 'privacy', src: 'docs/legal/privacy.md', title: 'Privacy policy', blurb: 'What CopyCam and this website do and do not collect.' },
   { slug: 'terms', src: 'docs/legal/terms.md', title: 'Terms of use', blurb: 'The terms for using CopyCam and this website.' },
   { slug: 'licenses', src: 'THIRD_PARTY_NOTICES.md', title: 'Third-party licences', blurb: 'The open-source software CopyCam is built on, and its licences.' },
-  { slug: 'accessibility', src: 'docs/legal/accessibility.md', title: 'Accessibility statement', blurb: 'How accessible CopyCam and this website are, and how to report a problem.' },
+  { slug: 'accessibility', src: 'docs/legal/accessibility.md', title: 'Accessibility statement', blurb: 'How accessible CopyCam and this website are, and how to report a problem.', alternate: 'he/accessibility' },
+  { slug: 'he/accessibility', src: 'docs/legal/accessibility.he.md', lang: 'he', title: 'הצהרת נגישות', blurb: 'עד כמה CopyCam והאתר נגישים, ואיך לדווח על בעיה.', alternate: 'accessibility' },
 ];
 
 const CSS = `
@@ -35,7 +36,8 @@ em{color:var(--soft)}
 code{font:13.5px ui-monospace,Menlo,monospace;background:var(--bg);border-radius:5px;padding:1px 5px;word-break:break-word}
 pre{background:var(--bg);border-radius:10px;padding:12px 14px;overflow-x:auto}
 pre code{background:none;padding:0;white-space:pre}
-ul{padding-left:22px}
+ul{padding-inline-start:22px}
+code{unicode-bidi:isolate}
 footer{margin-top:26px;display:flex;flex-wrap:wrap;gap:8px 20px;font:12px ui-monospace,Menlo,monospace;color:var(--soft)}
 footer a{color:var(--mid)}
 @media (max-width:520px){main{padding:4px 18px 22px}h1{font-size:26px}}
@@ -43,10 +45,16 @@ footer a{color:var(--mid)}
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
-export function renderPage({ slug, title, blurb, html }) {
+export function renderPage({ slug, title, blurb, html, lang = 'en', alternate }) {
   const url = `https://copycam.app/${slug}/`;
+  const other = lang === 'he' ? 'en' : 'he';
+  const alt = alternate
+    ? `<link rel="alternate" hreflang="${lang}" href="${url}">
+<link rel="alternate" hreflang="${other}" href="https://copycam.app/${alternate}/">
+`
+    : '';
   return `<!doctype html>
-<html lang="en">
+<html lang="${lang}" dir="${lang === 'he' ? 'rtl' : 'ltr'}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -54,7 +62,7 @@ export function renderPage({ slug, title, blurb, html }) {
 <meta name="description" content="${esc(blurb)}">
 <meta name="theme-color" content="#f1f0ec">
 <link rel="canonical" href="${url}">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+${alt}<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>${CSS}</style>
 </head>
 <body>
@@ -64,7 +72,7 @@ export function renderPage({ slug, title, blurb, html }) {
 ${html}
 </main>
 <footer>
-${PAGES.map((p) => `<a href="/${p.slug}/">${esc(p.title)}</a>`).join('\n')}
+${PAGES.map((p) => `<a href="/${p.slug}/"${p.lang ? ` lang="${p.lang}"` : ''}>${esc(p.title)}</a>`).join('\n')}
 <a href="https://github.com/copycam/copycam">GitHub</a>
 <a href="mailto:hello@copycam.app">hello@copycam.app</a>
 </footer>

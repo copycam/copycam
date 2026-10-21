@@ -179,6 +179,7 @@ export function Footer() {
         <a style={link} href="/terms/">Terms</a>
         <a style={link} href="/licenses/">Licences</a>
         <a style={link} href="/accessibility/">Accessibility</a>
+        <a style={link} href="/he/accessibility/" lang="he" hrefLang="he">הצהרת נגישות</a>
         <a style={link} href="mailto:hello@copycam.app">hello@copycam.app</a>
         <span style={{ marginLeft: 'auto' }}>CopyCam · GPL-3.0</span>
       </div>
