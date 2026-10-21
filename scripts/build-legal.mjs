@@ -13,10 +13,11 @@ export const PAGES = [
   { slug: 'privacy', src: 'docs/legal/privacy.md', title: 'Privacy policy', blurb: 'What CopyCam and this website do and do not collect.' },
   { slug: 'terms', src: 'docs/legal/terms.md', title: 'Terms of use', blurb: 'The terms for using CopyCam and this website.' },
   { slug: 'licenses', src: 'THIRD_PARTY_NOTICES.md', title: 'Third-party licences', blurb: 'The open-source software CopyCam is built on, and its licences.' },
+  { slug: 'accessibility', src: 'docs/legal/accessibility.md', title: 'Accessibility statement', blurb: 'How accessible CopyCam and this website are, and how to report a problem.' },
 ];
 
 const CSS = `
-:root{--ink:#161616;--mid:#55554f;--soft:#8a8a82;--bg:#f1f0ec;--card:#fff;--accent:#CFFF3B}
+:root{--ink:#161616;--mid:#55554f;--soft:#6b6b64;--bg:#f1f0ec;--card:#fff;--accent:#CFFF3B}
 @media (prefers-color-scheme:dark){:root{--ink:#f1f0ec;--mid:#c9c8c1;--soft:#9a9a92;--bg:#161616;--card:#1f1f1d}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 -apple-system,'Helvetica Neue',system-ui,sans-serif}

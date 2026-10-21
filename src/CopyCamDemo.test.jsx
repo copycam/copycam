@@ -230,4 +230,26 @@ describe('CopyCamDemo', () => {
     advance(900);
     expect(onPulse).toHaveBeenCalledTimes(3);
   });
+
+  it('keeps the review sheet out of reach while it is hidden below the screen', () => {
+    render(<CopyCamDemo />);
+    pairToIdle();
+    expect(screen.getByTestId('preview').closest('[inert]')).not.toBeNull();
+    idleToReview();
+    expect(screen.getByTestId('preview').closest('[inert]')).toBeNull();
+  });
+
+  it('moves keyboard focus on to the next control when the one used disappears', () => {
+    render(<CopyCamDemo />);
+    const pair = screen.getByRole('button', { name: /point at the qr code/i });
+    act(() => pair.focus());
+    fireEvent.click(pair);
+    advance(1500);
+    const shutter = screen.getByRole('button', { name: /scan text/i });
+    expect(document.activeElement).toBe(shutter);
+
+    fireEvent.click(shutter);
+    advance(1600);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /^send to/i }));
+  });
 });

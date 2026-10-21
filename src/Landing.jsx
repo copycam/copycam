@@ -33,7 +33,7 @@ const tag = {
 };
 const title = { fontSize: 16, fontWeight: 700, margin: 0 };
 const body = { fontSize: 14, lineHeight: 1.6, color: '#55554f', margin: 0 };
-const note = { fontSize: 12.5, lineHeight: 1.55, color: '#8a8a82', margin: 0 };
+const note = { fontSize: 12.5, lineHeight: 1.55, color: '#6b6b64', margin: 0 };
 
 function CopyCommand({ command, accentColor }) {
   const [copied, setCopied] = useState(false);
@@ -169,7 +169,7 @@ export function Footer() {
           gap: '10px 20px',
           fontFamily: MONO,
           fontSize: 12,
-          color: '#8a8a82',
+          color: '#6b6b64',
         }}
       >
         <a style={link} href={REPO}>GitHub</a>
@@ -178,6 +178,7 @@ export function Footer() {
         <a style={link} href="/privacy/">Privacy</a>
         <a style={link} href="/terms/">Terms</a>
         <a style={link} href="/licenses/">Licences</a>
+        <a style={link} href="/accessibility/">Accessibility</a>
         <a style={link} href="mailto:hello@copycam.app">hello@copycam.app</a>
         <span style={{ marginLeft: 'auto' }}>CopyCam · GPL-3.0</span>
       </div>

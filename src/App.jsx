@@ -52,10 +52,10 @@ export default function App({ accentColor = '#CFFF3B', deviceName = 'My MacBook'
         }}
       >
         <div style={{ maxWidth: 270, display: 'flex', flexDirection: 'column', gap: 22 }}>
-          <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: -1.2, lineHeight: 1 }}>
+          <h1 style={{ margin: 0, fontSize: 34, fontWeight: 800, letterSpacing: -1.2, lineHeight: 1 }}>
             Copy
             <span style={{ background: accentColor, padding: '2px 8px 4px', borderRadius: 10, marginLeft: 2 }}>Cam</span>
-          </div>
+          </h1>
           <div style={{ fontSize: 15, lineHeight: 1.55, color: '#55554f' }}>
             Point your phone at any text. It lands on your computer&rsquo;s clipboard, over Wi&#8209;Fi. Nothing else.
           </div>
@@ -80,10 +80,10 @@ export default function App({ accentColor = '#CFFF3B', deviceName = 'My MacBook'
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8a8a82', fontFamily: 'ui-monospace,Menlo,monospace' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b6b64', fontFamily: 'ui-monospace,Menlo,monospace' }}>
             <svg width="10" height="12" viewBox="0 0 10 12" style={{ flex: 'none' }} aria-hidden="true">
-              <rect x="0.75" y="5" width="8.5" height="6.25" rx="1.5" fill="none" stroke="#8a8a82" strokeWidth="1.5" />
-              <path d="M2.5 5V3.5a2.5 2.5 0 015 0V5" fill="none" stroke="#8a8a82" strokeWidth="1.5" />
+              <rect x="0.75" y="5" width="8.5" height="6.25" rx="1.5" fill="none" stroke="#6b6b64" strokeWidth="1.5" />
+              <path d="M2.5 5V3.5a2.5 2.5 0 015 0V5" fill="none" stroke="#6b6b64" strokeWidth="1.5" />
             </svg>
             end-to-end encrypted · use Wi-Fi you trust
           </div>
@@ -102,7 +102,7 @@ export default function App({ accentColor = '#CFFF3B', deviceName = 'My MacBook'
           >
             Get CopyCam <span style={{ color: accentColor }}>&darr;</span>
           </a>
-          <div style={{ fontSize: 12, color: '#8a8a82', fontFamily: 'ui-monospace,Menlo,monospace' }}>
+          <div style={{ fontSize: 12, color: '#6b6b64', fontFamily: 'ui-monospace,Menlo,monospace' }}>
             interactive demo &mdash; try it {scale < 1 ? '↓' : '→'}
           </div>
         </div>

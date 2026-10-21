@@ -91,6 +91,10 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
   const phaseRef = useRef(phase);
   const selRef = useRef(sel);
   const strokeRef = useRef(null);
+  const rootRef = useRef(null);
+  const shutterRef = useRef(null);
+  const sendRef = useRef(null);
+  const focusInside = useRef(false);
   const canvasRef = useRef(null);
   const qrDrawn = useRef(false);
   const pairTimer = useRef(null);
@@ -127,6 +131,13 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
     },
     [],
   );
+
+  useEffect(() => {
+    const active = document.activeElement;
+    if (!focusInside.current || (active && active !== document.body && rootRef.current?.contains(active))) return;
+    if (phase === 'idle') shutterRef.current?.focus({ preventScroll: true });
+    if (phase === 'review') sendRef.current?.focus({ preventScroll: true });
+  }, [phase]);
 
   const haptic = useCallback(() => {
     onPulse?.();
@@ -233,7 +244,16 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
   };
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+    <div
+      ref={rootRef}
+      onFocus={() => {
+        focusInside.current = true;
+      }}
+      onBlur={(e) => {
+        if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget)) focusInside.current = false;
+      }}
+      style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}
+    >
       {showPair && (
         <div
           style={{
@@ -249,7 +269,7 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
             textAlign: 'center',
           }}
         >
-          <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: 2, color: '#9a9a92' }}>PAIR ONCE</div>
+          <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: 2, color: '#6b6b64' }}>PAIR ONCE</div>
 
           {/* what the computer shows: the command, then the code to scan */}
           <div style={{ width: 214, background: '#fff', borderRadius: 16, boxShadow: '0 2px 14px rgba(0,0,0,.07),0 0 0 1px rgba(0,0,0,.05)', overflow: 'hidden' }}>
@@ -257,13 +277,13 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
               {[0, 1, 2].map((i) => (
                 <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#d6d5ce' }} />
               ))}
-              <span style={{ marginLeft: 6, fontSize: 10.5, color: '#9a9a92', fontWeight: 600 }}>{deviceName}</span>
+              <span style={{ marginLeft: 6, fontSize: 10.5, color: '#6b6b64', fontWeight: 600 }}>{deviceName}</span>
             </div>
             <div style={{ padding: '14px 14px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
               <div style={{ alignSelf: 'flex-start', fontFamily: MONO, fontSize: 12.5, color: '#26261f' }}>
-                <span style={{ color: '#9a9a92' }}>$ </span>npx copycam
+                <span style={{ color: '#6b6b64' }}>$ </span>npx copycam
               </div>
-              <canvas ref={canvasRef} width={200} height={200} style={{ width: 138, height: 138, display: 'block', imageRendering: 'pixelated' }} />
+              <canvas ref={canvasRef} width={200} height={200} role="img" aria-label="QR code shown on the computer" style={{ width: 138, height: 138, display: 'block', imageRendering: 'pixelated' }} />
             </div>
           </div>
 
@@ -452,6 +472,7 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
 
           {(phase === 'idle' || phase === 'scanning') && (
             <button
+              ref={shutterRef}
               onClick={scan}
               aria-label="Scan text"
               style={{
@@ -474,6 +495,7 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
           )}
 
           <div
+            inert={!review}
             style={{
               position: 'absolute',
               left: 0,
@@ -488,7 +510,7 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
             }}
           >
             <div style={{ width: 44, height: 5, borderRadius: 3, background: 'rgba(0,0,0,.18)', margin: '0 auto 12px' }} />
-            <div style={{ fontSize: 13, fontWeight: 600, color: n === 0 ? '#b0afa8' : '#8a8a82', marginBottom: 9 }}>{status}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#6b6b64', marginBottom: 9 }}>{status}</div>
             <div
               data-testid="preview"
               aria-label={text}
@@ -508,7 +530,7 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
               }}
             >
               {text.length === 0 ? (
-                <span style={{ color: '#b0afa8' }}>Drag across the photo to select text.</span>
+                <span style={{ color: '#6b6b64' }}>Drag across the photo to select text.</span>
               ) : (
                 marks.map((seg, i) =>
                   seg.mark === 'risky' ? (
@@ -528,10 +550,11 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
                 )
               )}
             </div>
-            <div style={{ minHeight: 30, fontSize: 12, lineHeight: 1.4, color: '#8a8a82', padding: '7px 2px 9px' }}>
+            <div style={{ minHeight: 30, fontSize: 12, lineHeight: 1.4, color: '#6b6b64', padding: '7px 2px 9px' }}>
               {doubtful ? 'Look-alikes like 0 and O are underlined. Check them before you send.' : ''}
             </div>
             <button
+              ref={sendRef}
               onClick={send}
               disabled={!canSend || sending}
               style={{
@@ -550,10 +573,10 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
             >
               {sending ? 'Sending…' : !canSend ? 'Select text to send' : `Send to ${deviceName}`}
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 9, fontFamily: MONO, fontSize: 11, color: '#9a9a92' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 9, fontFamily: MONO, fontSize: 11, color: '#6b6b64' }}>
               <svg width="10" height="12" viewBox="0 0 10 12" style={{ flex: 'none' }} aria-hidden="true">
-                <rect x="0.75" y="5" width="8.5" height="6.25" rx="1.5" fill="none" stroke="#9a9a92" strokeWidth="1.5" />
-                <path d="M2.5 5V3.5a2.5 2.5 0 015 0V5" fill="none" stroke="#9a9a92" strokeWidth="1.5" />
+                <rect x="0.75" y="5" width="8.5" height="6.25" rx="1.5" fill="none" stroke="#6b6b64" strokeWidth="1.5" />
+                <path d="M2.5 5V3.5a2.5 2.5 0 015 0V5" fill="none" stroke="#6b6b64" strokeWidth="1.5" />
               </svg>
               end-to-end encrypted
             </div>

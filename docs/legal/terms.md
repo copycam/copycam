@@ -1,6 +1,6 @@
 # Terms of use
 
-_Last updated: 20 October 2026_
+_Last updated: 21 October 2026_
 
 **The short version.** CopyCam is free software. You may use it, change it and share it under the GPL-3.0. It comes with no warranty, and text recognition is never perfect, so check anything that has to be exact.
 
@@ -35,6 +35,10 @@ I try to keep the site accurate and available, but it is provided as is and may 
 
 If I change these terms I'll update the date at the top, and the complete history is public in [the repository](https://github.com/copycam/copycam/commits/main/docs/legal/terms.md). If you keep using CopyCam after a change, the new terms apply to you.
 
-## 8. Contact
+## 8. Law and courts
 
-Safi Hazzan, [hello@copycam.app](mailto:hello@copycam.app).
+These terms are governed by the laws of the State of Israel, and the competent courts in Israel have jurisdiction over any dispute about them. Please write to me first: most problems are easier to solve by email. If you use CopyCam as a consumer, this doesn't take away any protection, or any right to go to court where you live, that the law of your country gives you.
+
+## 9. Contact
+
+Safi Hazzan, Israel. [hello@copycam.app](mailto:hello@copycam.app).

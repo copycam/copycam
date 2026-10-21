@@ -51,6 +51,7 @@ Look at the terminal. When the phone sends something, it prints *✓ Copied 24 c
 - **`No LAN network interface found`:** connect the PC to Wi-Fi or Ethernet first.
 - **`dist/mobile.html not found`:** you are running from a git checkout. Use `npm start`, which builds first.
 - **Errors about syntax or modules:** CopyCam needs Node 20.19 or newer. Check with `node --version`.
+- **Installing on 64-bit Linux is slow or downloads a lot:** one component, ONNX Runtime, fetches an optional graphics-card add-on from Microsoft's NuGet service while installing. CopyCam doesn't use it. Skip it with `ONNXRUNTIME_NODE_INSTALL=skip npx copycam`.
 
 ## The first scan is slow, or wants the internet
 
@@ -72,7 +73,7 @@ No reader is perfect, and the [README](../README.md) lists what it is weakest at
 
 ## Where CopyCam keeps things
 
-- `.copycam` in your user folder: the pairing key (`key.json`) and the certificate (`tls.json`). Delete the folder and every phone has to pair again.
+- `.copycam` in your user folder: the pairing key (`key.json`) and the certificate (`tls.json`), plus the backup reader's English language data if it was ever needed. Delete the folder and every phone has to pair again.
 - `.cache/ppu-paddle-ocr` in your user folder: downloaded reading models. Safe to delete.
 - To pair with a fresh key and drop all phones: `npx copycam --reset`.
 
