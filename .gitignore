@@ -31,3 +31,6 @@ models/
 
 # the public website build (npm run build:site)
 dist-site/
+
+# Wrangler's local state (wrangler.jsonc deploys dist-site to Cloudflare)
+.wrangler/
