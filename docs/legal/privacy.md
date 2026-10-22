@@ -25,7 +25,7 @@ This covers the `copycam` program you run on your computer and the CopyCam page 
 **The few connections it makes.** While you use it, none. A few things do reach out, and none of them carries a photo or any text:
 
 - Installing it with `npx copycam` downloads it from the npm registry, which is run by GitHub.
-- On 64-bit Linux, installing also lets one of its components (ONNX Runtime) download an optional graphics-card add-on from Microsoft's NuGet service (`api.nuget.org`). CopyCam doesn't use it. To prevent the download, set the environment variable `ONNXRUNTIME_NODE_INSTALL=skip` before installing. Windows, macOS and other Linux machines don't make this download.
+- On 64-bit Linux, installing also lets one of its components (ONNX Runtime) download an optional graphics-card add-on (about 270 MB) from Microsoft's NuGet service (`api.nuget.org`). CopyCam doesn't use it. To prevent the download, set the environment variable `ONNXRUNTIME_NODE_INSTALL=skip` before installing. Windows, macOS and other Linux machines don't make this download.
 - The default text-reading model ships inside the package. If you pick a different script (for example Cyrillic or Arabic), that model is downloaded once from GitHub (`raw.githubusercontent.com` and `media.githubusercontent.com`) and kept.
 - If the main reader can't start, the backup reader fetches its English language data once from jsDelivr (`cdn.jsdelivr.net`).
 

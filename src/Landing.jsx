@@ -95,8 +95,9 @@ export function GetCopyCam({ accentColor }) {
             It shows a QR code and keeps running while you scan. No account, nothing to sign up for.
           </p>
           <p style={note}>
-            Needs <a href="https://nodejs.org/">Node.js</a> 20.19 or newer. Runs on Windows, macOS and Linux; it
-            is tested most on Windows.
+            Needs <a href="https://nodejs.org/">Node.js</a> 20.19 or newer. Runs on Windows, macOS and Linux, and is
+            tested on all three with every change. On Linux, start it with{' '}
+            <code>ONNXRUNTIME_NODE_INSTALL=skip npx copycam</code> to skip a 270&nbsp;MB add-on it doesn&rsquo;t use.
           </p>
         </div>
         <div style={card}>

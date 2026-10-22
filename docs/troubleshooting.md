@@ -51,7 +51,7 @@ Look at the terminal. When the phone sends something, it prints *✓ Copied 24 c
 - **`No LAN network interface found`:** connect the PC to Wi-Fi or Ethernet first.
 - **`dist/mobile.html not found`:** you are running from a git checkout. Use `npm start`, which builds first.
 - **Errors about syntax or modules:** CopyCam needs Node 20.19 or newer. Check with `node --version`.
-- **Installing on 64-bit Linux is slow or downloads a lot:** one component, ONNX Runtime, fetches an optional graphics-card add-on from Microsoft's NuGet service while installing. CopyCam doesn't use it. Skip it with `ONNXRUNTIME_NODE_INSTALL=skip npx copycam`.
+- **Installing on 64-bit Linux is slow or downloads a lot:** one component, ONNX Runtime, fetches an optional graphics-card add-on (about 270 MB) from Microsoft's NuGet service while installing. CopyCam doesn't use it. Skip it with `ONNXRUNTIME_NODE_INSTALL=skip npx copycam`.
 
 ## The first scan is slow, or wants the internet
 

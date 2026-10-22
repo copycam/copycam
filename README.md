@@ -97,6 +97,8 @@ Every payload between phone and PC is end-to-end encrypted (AES-256-GCM) with a 
 
 ## Develop
 
+Every push is checked on Windows, macOS and Linux (lint, unit tests, the website build, and `npm run smoke`, which installs the packed package into an empty folder and checks that it reads text offline and serves the phone page).
+
 ```
 npm run dev         # landing page + demo (Vite)
 npm run serve       # start the companion without rebuilding
