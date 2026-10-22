@@ -52,7 +52,8 @@
     "prepack": "node scripts/fetch-models.mjs && npm run build",
     "models": "node scripts/fetch-models.mjs",
     "build:site": "vite build --config vite.site.config.js && node scripts/build-legal.mjs",
-    "notices": "node scripts/make-notices.mjs"
+    "notices": "node scripts/make-notices.mjs",
+    "smoke": "node scripts/smoke-install.mjs"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.3",

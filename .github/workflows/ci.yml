@@ -1,0 +1,69 @@
+name: CI
+
+# Every push to main and every pull request is checked on Windows, macOS and
+# Linux: the unit tests, the lint, the website build, and (the check that matters
+# most) a real install of the packed package, the way a new user's machine does it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests · ${{ matrix.os }} · Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ['22']
+        include:
+          # the oldest Node that package.json promises to support
+          - os: ubuntu-latest
+            node: '20.19.0'
+    env:
+      # the tests don't need ONNX Runtime's optional GPU add-on, which is a large download on Linux
+      ONNXRUNTIME_NODE_INSTALL: skip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build:site
+
+  install:
+    name: Install smoke test · ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Windows, os: windows-latest, skip_gpu: skip }
+          - { name: macOS, os: macos-latest, skip_gpu: skip }
+          - { name: Linux, os: ubuntu-latest, skip_gpu: skip }
+          # what a Linux user gets by default, with ONNX Runtime fetching its GPU add-on
+          - { name: Linux (default install), os: ubuntu-latest, skip_gpu: '' }
+    env:
+      ONNXRUNTIME_NODE_INSTALL: ${{ matrix.skip_gpu }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      # the repository's own install needs none of that add-on, whatever the smoke test below does
+      - run: npm ci
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
+      - run: npm run smoke
