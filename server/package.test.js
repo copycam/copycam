@@ -37,11 +37,18 @@ describe('published package', () => {
   });
 
   it('ships the companion and the built phone app, and leaves the tests out', () => {
-    expect(pkg.files).toEqual(expect.arrayContaining(['server/', 'shared/', 'dist/', 'models/', 'licenses/', 'LICENSE', 'NOTICE.md', 'THIRD_PARTY_NOTICES.md']));
+    expect(pkg.files).toEqual(expect.arrayContaining(['server/', 'shared/', 'dist/', 'models/', 'licenses/', 'LICENSE', 'NOTICE.md', 'THIRD_PARTY_NOTICES.md', 'CHANGELOG.md']));
     expect(pkg.files).toContain('!**/*.test.js');
     // dist/ and models/ are not committed, so every pack has to produce them
     expect(pkg.scripts.prepack).toContain('scripts/fetch-models.mjs');
     expect(pkg.scripts.prepack).toContain('npm run build');
+  });
+
+  it('has release notes for the version being published', () => {
+    const changelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
+    expect(changelog).toContain('## ' + pkg.version + '\n');
+    // newest first: the current version is the first entry
+    expect(changelog.match(/^## (\S+)$/m)[1]).toBe(pkg.version);
   });
 
   it('declares the licence that the LICENSE file carries', () => {

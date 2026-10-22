@@ -97,6 +97,8 @@ Every payload between phone and PC is end-to-end encrypted (AES-256-GCM) with a 
 
 ## Develop
 
+Release notes are in [CHANGELOG.md](CHANGELOG.md), and the steps for publishing a version are in [docs/releasing.md](docs/releasing.md).
+
 Every push is checked on Windows, macOS and Linux (lint, unit tests, the website build, and `npm run smoke`, which installs the packed package into an empty folder and checks that it reads text offline and serves the phone page).
 
 ```
