@@ -65,6 +65,13 @@ try {
   run(npm, npmArgs(['install', tarball, '--no-audit', '--no-fund']), project, { stdio: ['ignore', 'ignore', 'inherit'] });
   const pkgDir = path.join(project, 'node_modules', 'copycam');
   check('installs with its dependencies', fs.existsSync(path.join(pkgDir, 'server', 'index.js')));
+  // for information, not a pass/fail: what ONNX Runtime's installer put on this machine
+  const binDir = path.join(pkgDir, '..', 'onnxruntime-node', 'bin', 'napi-v6', process.platform, process.arch);
+  const sizeOf = (d) => fs.readdirSync(d, { withFileTypes: true }).reduce((n, e) => n + (e.isDirectory() ? sizeOf(path.join(d, e.name)) : fs.statSync(path.join(d, e.name)).size), 0);
+  if (fs.existsSync(binDir)) {
+    const cuda = fs.readdirSync(binDir).filter((f) => /cuda/i.test(f));
+    console.log('  info   ONNX Runtime binaries on this machine: ' + (sizeOf(binDir) / 1e6).toFixed(0) + ' MB, GPU (CUDA) add-on ' + (cuda.length ? 'PRESENT (' + cuda.join(', ') + ')' : 'absent'));
+  }
   check('ships the default model', fs.existsSync(path.join(pkgDir, 'models', 'PP-OCRv6_small_rec.ort')));
 
   console.log('Reading text offline with the bundled model...');
