@@ -1,6 +1,36 @@
 # CopyCam
 
-Point your phone at any text. It lands on your computer's clipboard, over Wi-Fi. Nothing else.
+**Point your phone at any text. It lands on your computer's clipboard, over Wi-Fi.** Nothing else.
+
+[![CI](https://github.com/copycam/copycam/actions/workflows/ci.yml/badge.svg)](https://github.com/copycam/copycam/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/copycam)](https://www.npmjs.com/package/copycam) [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+
+![A phone is pointed at a Wi-Fi label, the password is picked, and it arrives on the computer's clipboard.](docs/media/copycam-demo.gif)
+
+## Try it
+
+On your computer (it needs [Node.js](https://nodejs.org/) 20.19 or newer):
+
+```
+npx copycam
+```
+
+It prints a QR code. Then, on your phone, on the same Wi-Fi:
+
+1. **Scan the QR code** with the camera and open the link. The first time, the browser warns that the connection isn't private: that's CopyCam's own certificate. Tap Show Details (or Advanced), then Visit Website. ([Why that's expected.](docs/troubleshooting.md#this-connection-is-not-private))
+2. **Frame the text** and tap the shutter.
+3. **Drag across the words you want** and tap Send. Paste on your computer.
+
+[Website and live demo](https://copycam.app) · [Troubleshooting](docs/troubleshooting.md) · [How it's secured](SECURITY.md) · [Changelog](CHANGELOG.md)
+
+**Why you might like it**
+
+- **Private.** The text is read on your own computer, not in a cloud. The photo is encrypted on the way, and never saved. There's no account, no tracking and no ads.
+- **Careful with mistakes.** Look-alike characters (`0` and `O`, `1` and `l`, `5` and `S`) are underlined, so you can check a password before you send it.
+- **Free software.** GPL-3.0. It runs on Windows, macOS and Linux, and every change is tested on all three. On Linux, start it with `ONNXRUNTIME_NODE_INSTALL=skip npx copycam` to skip a 270 MB download that CopyCam doesn't use.
+
+---
+
+## What's in this repository
 
 This repo contains the desktop companion, the browser phone app and the landing page:
 
@@ -10,7 +40,9 @@ This repo contains the desktop companion, the browser phone app and the landing 
 
 A native iPhone and Android app is coming soon. It will speak the same encrypted protocol to the same companion.
 
-## Use it
+## Run it from a git checkout
+
+(To just use CopyCam, `npx copycam` above is all you need. This is for working on the code.)
 
 ```
 npm install

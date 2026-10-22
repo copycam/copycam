@@ -51,6 +51,18 @@ describe('published package', () => {
     expect(changelog.match(/^## (\S+)$/m)[1]).toBe(pkg.version);
   });
 
+  it('opens the README with the one-line quick start and a demo picture that exists', () => {
+    const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+    const front = readme.slice(0, readme.indexOf('## What'));
+    expect(front).toContain('npx copycam');
+    const gif = front.match(/\(([^)]*\.gif)\)/)?.[1];
+    expect(gif, 'the README front page shows a GIF').toBeTruthy();
+    const file = path.join(root, gif);
+    expect(fs.existsSync(file)).toBe(true);
+    // it loads on a phone too: keep it small
+    expect(fs.statSync(file).size).toBeLessThan(2_000_000);
+  });
+
   it('declares the licence that the LICENSE file carries', () => {
     expect(pkg.license).toBe('GPL-3.0-only');
     expect(fs.readFileSync(path.join(root, 'LICENSE'), 'utf8')).toContain('GNU GENERAL PUBLIC LICENSE');
