@@ -1,6 +1,6 @@
 # Privacy policy
 
-_Last updated: 21 October 2026_
+_Last updated: 22 October 2026_
 
 **The short version.** The CopyCam software has no accounts, no tracking and no ads. Your photos and the text you send go from your phone to your own computer, encrypted, and nowhere else. This website counts visits with Cloudflare's analytics and keeps nothing else about you.
 
@@ -44,6 +44,8 @@ Those services see your IP address and which file you asked for, and they have t
 ## Email and GitHub
 
 **Email.** Mail to hello@copycam.app arrives through Cloudflare Email Routing and is forwarded to my personal mailbox. I use your address and message only to reply, and I keep a conversation for as long as it is useful. Ask me and I'll delete it.
+
+**Phone.** The accessibility statement lists a phone number. If you call or message me on it, I use your number only to reply, and I delete it on request.
 
 **GitHub.** The code and its issue tracker live at [github.com/copycam](https://github.com/copycam). Anything you post there is public and handled under [GitHub's privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement). Please don't paste a CopyCam pairing link in an issue: the part after `#k=` is your key.
 

@@ -1,6 +1,6 @@
 # Accessibility statement
 
-_Last updated: 21 October 2026_
+_Last updated: 22 October 2026_
 
 I want everyone to be able to use CopyCam, including people who use a screen reader, a keyboard, magnification or other assistive technology.
 
@@ -32,6 +32,11 @@ I checked by hand in Chrome, on a computer and in phone view: keyboard navigatio
 
 ## Tell me about a problem
 
-If something on this site or in CopyCam is hard to use, please tell me which page, what you were trying to do, and the device, browser and any assistive technology you use. I'm the accessibility contact: Safi Hazzan, [hello@copycam.app](mailto:hello@copycam.app). I'll reply as soon as I can, usually within a few days.
+If something on this site or in CopyCam is hard to use, please tell me which page, what you were trying to do, and the device, browser and any assistive technology you use. I'm the accessibility contact: Safi Hazzan.
+
+- Email: [hello@copycam.app](mailto:hello@copycam.app)
+- Phone (Israel): [+972 54-974-2062](tel:+972549742062)
+
+I'll reply as soon as I can, usually within a few days.
 
 This statement is also available in Hebrew: [הצהרת נגישות](/he/accessibility/).

@@ -36,6 +36,9 @@ describe('legal pages', () => {
     // both statements name the same contact, so neither can drift from the other
     expect(he).toContain('hello@copycam.app');
     expect(en).toContain('hello@copycam.app');
+    expect(he).toContain('tel:+972549742062');
+    expect(en).toContain('tel:+972549742062');
+    expect(he).toContain('סאפי חזאן');
   });
 
   it('pages carry no scripts and load nothing from other sites, so the strict CSP holds', () => {
