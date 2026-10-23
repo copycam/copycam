@@ -1,15 +1,25 @@
 {
-  // copycam.app is a static site on Cloudflare's network: no Worker code, only
-  // the files `npm run build:site` writes to dist-site (the landing page, the
-  // legal pages, and the _headers and _redirects rules).
+  // copycam.app on Cloudflare's network: the files `npm run build:site` writes
+  // to dist-site (the landing page, the legal pages, the two app pages, and the
+  // _headers and _redirects rules), plus a small Worker (worker/index.js) for
+  // the relay that links a phone to a CopyCam tab, and the app pages' headers.
   "name": "copycam",
+  "main": "worker/index.js",
   "compatibility_date": "2026-10-01",
   // builds the site before every deploy, so it never depends on a build
   // command being set in the Cloudflare dashboard
   "build": { "command": "npm run build:site" },
   "assets": {
     "directory": "./dist-site",
+    "binding": "ASSETS",
     // /privacy/ serves privacy/index.html, and /privacy redirects to /privacy/
-    "html_handling": "auto-trailing-slash"
-  }
+    "html_handling": "auto-trailing-slash",
+    // everything else is a static file, served without running the Worker
+    "run_worker_first": ["/relay/*", "/app/*", "/p/*", "/tiktok", "/ig", "/yt"]
+  },
+  // one room per linked computer (worker/room.js); it stores nothing
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }]
 }

@@ -1,6 +1,6 @@
 # Terms of use
 
-_Last updated: 21 October 2026_
+_Last updated: 23 October 2026_
 
 **The short version.** CopyCam is free software. You may use it, change it and share it under the GPL-3.0. It comes with no warranty, and text recognition is never perfect, so check anything that has to be exact.
 
@@ -13,7 +13,7 @@ The CopyCam software is licensed under the [GNU General Public License v3.0](htt
 As the GPL says, the software is provided "as is", without warranty of any kind, express or implied, including merchantability, fitness for a particular purpose and non-infringement. In particular:
 
 - Text recognition makes mistakes. Look-alike characters (`0` and `O`, `1` and `l`, `5` and `S`) are the usual culprits. Check anything that has to be exact, such as a password, a key or an account number, before you rely on it.
-- CopyCam is meant for Wi-Fi you trust. [SECURITY.md](https://github.com/copycam/copycam/blob/main/SECURITY.md) explains what its encryption protects against and what it does not.
+- The desktop companion is meant for Wi-Fi you trust. [SECURITY.md](https://github.com/copycam/copycam/blob/main/SECURITY.md) explains what CopyCam's encryption protects against and what it does not, in both versions.
 
 ## 3. Limit of liability
 
@@ -21,15 +21,15 @@ To the extent the law allows, I am not liable for any loss or damage that comes 
 
 ## 4. Use it responsibly
 
-Use CopyCam on devices and networks that you own or have permission to use, and only to copy text you have the right to copy. Keep your pairing QR code private: anyone who has it can send text to your computer's clipboard while it is running. Don't use this website, or the project's pages on GitHub, to attack, overload or harm anyone.
+Use CopyCam on devices and networks that you own or have permission to use, and only to copy text you have the right to copy. Keep your pairing QR code private: anyone who has it can send text to your computer while CopyCam is open there. Don't use this website, its relay, or the project's pages on GitHub, to attack, overload or harm anyone, or to carry anything other than CopyCam's own traffic.
 
 ## 5. The name and logo
 
 The code is free to use, change and share. The name "CopyCam" and its logo are not part of that licence. You can't use them as the name of a different product or to suggest that I endorse it. A fork or modified version is welcome, under a name of its own.
 
-## 6. This website
+## 6. This website and its relay
 
-I try to keep the site accurate and available, but it is provided as is and may change or go offline. It links to other sites that I don't control and am not responsible for. Its source code is part of the GPL-3.0 project, apart from the name and logo as described above.
+The browser version (copycam.app/app) is a free service. I try to keep the site, and the relay that links your phone to it, accurate and available, but both are provided as is, may change or go offline, and limit how much each connection may send so that the service stays up for everyone. If you need CopyCam to work with no dependence on this website, the desktop companion runs entirely on your own computer and network. It links to other sites that I don't control and am not responsible for. Its source code is part of the GPL-3.0 project, apart from the name and logo as described above.
 
 ## 7. Changes to these terms
 

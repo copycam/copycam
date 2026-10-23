@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { IOSDevice } from './IOSDevice.jsx';
 import CopyCamDemo from './CopyCamDemo.jsx';
 import { GetCopyCam, Promises, Footer } from './Landing.jsx';
+import { useOnPhone } from './useOnPhone.js';
 
 const DEVICE_W = 402;
 const DEVICE_H = 874;
@@ -20,15 +21,16 @@ function useDeviceScale() {
 }
 
 const STEPS = [
-  'Pair once — scan the QR on your computer',
+  'Open copycam.app on your computer, and scan its code once',
   'Frame the text and tap — pick the words you want',
-  "Send — it's on your PC's clipboard",
+  "Send — it's on your computer's clipboard",
 ];
 
 export default function App({ accentColor = '#CFFF3B', deviceName = 'My MacBook', autoSend = false }) {
   const [pulse, setPulse] = useState(false);
   const pulseTimer = useRef(null);
   const scale = useDeviceScale();
+  const onPhone = useOnPhone();
 
   const triggerPulse = () => {
     setPulse(false);
@@ -57,7 +59,7 @@ export default function App({ accentColor = '#CFFF3B', deviceName = 'My MacBook'
             <span style={{ background: accentColor, padding: '2px 8px 4px', borderRadius: 10, marginLeft: 2 }}>Cam</span>
           </h1>
           <div style={{ fontSize: 15, lineHeight: 1.55, color: '#55554f' }}>
-            Point your phone at any text. It lands on your computer&rsquo;s clipboard, over Wi&#8209;Fi. Nothing else.
+            Point your phone at any text. It lands on your computer&rsquo;s clipboard. Nothing to install, nothing else.
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13.5, color: '#3a3a36' }}>
             {STEPS.map((step, i) => (
@@ -85,10 +87,11 @@ export default function App({ accentColor = '#CFFF3B', deviceName = 'My MacBook'
               <rect x="0.75" y="5" width="8.5" height="6.25" rx="1.5" fill="none" stroke="#6b6b64" strokeWidth="1.5" />
               <path d="M2.5 5V3.5a2.5 2.5 0 015 0V5" fill="none" stroke="#6b6b64" strokeWidth="1.5" />
             </svg>
-            end-to-end encrypted · use Wi-Fi you trust
+            end-to-end encrypted · read on your computer
           </div>
+          {/* on a phone, the app page is no use yet: say where to start instead */}
           <a
-            href="#get"
+            href={onPhone ? '#get' : '/app/'}
             style={{
               alignSelf: 'flex-start',
               background: '#161616',
@@ -100,7 +103,15 @@ export default function App({ accentColor = '#CFFF3B', deviceName = 'My MacBook'
               fontWeight: 700,
             }}
           >
-            Get CopyCam <span style={{ color: accentColor }}>&darr;</span>
+            {onPhone ? (
+              <>
+                How to start <span style={{ color: accentColor }}>&darr;</span>
+              </>
+            ) : (
+              <>
+                Start CopyCam <span style={{ color: accentColor }}>&rarr;</span>
+              </>
+            )}
           </a>
           <div style={{ fontSize: 12, color: '#6b6b64', fontFamily: 'ui-monospace,Menlo,monospace' }}>
             interactive demo &mdash; try it {scale < 1 ? '↓' : '→'}

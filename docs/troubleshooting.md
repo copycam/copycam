@@ -1,10 +1,26 @@
 # Troubleshooting
 
-Almost every problem is one of three things: the phone can't reach the PC, the browser is blocking something, or the text was read wrong. Find the heading that matches what you see.
+Almost every problem is one of three things: the phone can't reach the computer, the browser is blocking something, or the text was read wrong. Find the heading that matches what you see. The first section is for the browser version (copycam.app); the rest is mostly about the desktop companion (`npx copycam`).
+
+## In the browser (copycam.app)
+
+**The phone says it can't reach your computer.** The copycam.app tab has to stay open on the computer while you scan. If you closed it, open [copycam.app/app](https://copycam.app/app/) again: the phone reconnects by itself, with no rescan. The phone and the computer don't need to share a Wi-Fi network, but both need to be online.
+
+**"CopyCam is open in another tab."** Only one tab can be linked at a time, and the newest one takes over. Click **Use this tab instead** in the tab you want, or close the other one.
+
+**"Your computer no longer recognises this phone."** Someone clicked **Unlink phones (new code)** on the computer page, or that browser's data was cleared. Scan the new code.
+
+**The text arrived, but it isn't on the clipboard.** A browser only lets the page in front write to the clipboard. If you were in another window when the text arrived, the tab holds it: switch back to the tab (Chrome and Edge then copy it at once) or click **Copy** next to it. To be told when text arrives, click **Turn on notices** on the page. If clicking Copy says the browser won't let the page copy, select the text and press Ctrl+C (⌘C on a Mac).
+
+**"Getting the text reader ready" takes a while.** The first visit downloads the text reader, about 44 MB; after that the browser keeps it, and the page is ready in a second. A private or incognito window forgets it each time. If the download fails, check the connection and click **Try again**; some work networks block large downloads.
+
+**The camera doesn't open on the phone.** Allow the camera for copycam.app when the phone asks. If you said no before, allow it in the browser's site settings. Some apps open links in their own built-in browser, which may not offer the camera: open the link in Safari or Chrome instead. You can always tap the shutter and take the photo with the camera app.
+
+**Other languages.** The browser version reads Latin-alphabet languages, Chinese, Japanese and Korean. For Cyrillic, Arabic, Greek, Hindi, Thai and the other scripts, use the desktop companion.
 
 ## The phone says it can't reach your computer
 
-The phone shows *"Check CopyCam is still running on your computer and that both are on the same Wi-Fi."* Work down this list and stop at the first fix that works.
+With the desktop companion, the phone shows *"Check CopyCam is still running on your computer and that both are on the same Wi-Fi."* Work down this list and stop at the first fix that works.
 
 1. **Is CopyCam still running?** The terminal window it started in has to stay open. If you closed it, start it again.
 2. **Same network?** The phone must be on the same Wi-Fi as the PC. Mobile data doesn't count, and neither does a guest network. A PC on Ethernet works if its router also serves the Wi-Fi.

@@ -1,6 +1,6 @@
 # CopyCam
 
-**Point your phone at any text. It lands on your computer's clipboard, over Wi-Fi.** Nothing else.
+**Point your phone at any text. It lands on your computer's clipboard.** Nothing to install, nothing else.
 
 [![CI](https://github.com/copycam/copycam/actions/workflows/ci.yml/badge.svg)](https://github.com/copycam/copycam/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/copycam)](https://www.npmjs.com/package/copycam) [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
@@ -8,23 +8,27 @@
 
 ## Try it
 
-On your computer (it needs [Node.js](https://nodejs.org/) 20.19 or newer):
+**In your browser, nothing to install:** open [copycam.app/app](https://copycam.app/app/) on your computer. Then, on your phone:
+
+1. **Scan the QR code** it shows with the camera, and open the link. The phone can be on any network.
+2. **Frame the text** and tap the shutter.
+3. **Drag across the words you want** and tap Send. Paste on your computer.
+
+The photo is read in that browser tab, on your computer, and travels there through copycam.app sealed end to end, so the site can't read it.
+
+**Or run the desktop companion** on your own network (it needs [Node.js](https://nodejs.org/) 20.19 or newer):
 
 ```
 npx copycam
 ```
 
-It prints a QR code. Then, on your phone, on the same Wi-Fi:
-
-1. **Scan the QR code** with the camera and open the link. The first time, the browser warns that the connection isn't private: that's CopyCam's own certificate. Tap Show Details (or Advanced), then Visit Website. ([Why that's expected.](docs/troubleshooting.md#this-connection-is-not-private))
-2. **Frame the text** and tap the shutter.
-3. **Drag across the words you want** and tap Send. Paste on your computer.
+It prints a QR code to scan the same way, from a phone on the same Wi-Fi. Nothing leaves your network, text lands on the clipboard with no click, and it also reads Cyrillic, Arabic, Greek, Thai, Hindi and more. The first time, the phone's browser warns that the connection isn't private: that's CopyCam's own certificate. Tap Show Details (or Advanced), then Visit Website. ([Why that's expected.](docs/troubleshooting.md#this-connection-is-not-private))
 
 [Website and live demo](https://copycam.app) · [Troubleshooting](docs/troubleshooting.md) · [How it's secured](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 **Why you might like it**
 
-- **Private.** The text is read on your own computer, not in a cloud. The photo is encrypted on the way, and never saved. There's no account, no tracking and no ads.
+- **Private.** The text is read on your own computer, not in a cloud. The photo is encrypted end to end on the way, and never saved. There's no account, no tracking and no ads.
 - **Careful with mistakes.** Look-alike characters (`0` and `O`, `1` and `l`, `5` and `S`) are underlined, so you can check a password before you send it.
 - **Free software.** GPL-3.0. It runs on Windows, macOS and Linux, and every change is tested on all three. On Linux, start it with `ONNXRUNTIME_NODE_INSTALL=skip npx copycam` to skip a 270 MB download that CopyCam doesn't use.
 
@@ -32,17 +36,20 @@ It prints a QR code. Then, on your phone, on the same Wi-Fi:
 
 ## What's in this repository
 
-This repo contains the desktop companion, the browser phone app and the landing page:
+This repo contains both forms of CopyCam, the phone app they share, and the website:
 
-- **Desktop companion** ([server/](server)) — a small Node server you run on your PC. Runs OCR ([PaddleOCR models on ONNX Runtime](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr), no Python), writes received text to the clipboard, shows the pairing QR, and serves the browser app.
-- **Phone app, browser** ([mobile.html](mobile.html) + [src/mobile/](src/mobile)) — zero install. Scan the pairing QR with the phone's camera and it opens in the browser.
+- **Browser version** ([app/](app) + [src/web/](src/web)) — copycam.app/app, the computer's side in a browser tab. It shows the pairing QR, reads photos in a worker with the same model and reading code as the companion (compiled to WebAssembly), and puts the text on the clipboard.
+- **Relay** ([worker/](worker)) — the Cloudflare Worker behind copycam.app: it serves the site and passes sealed messages between a phone and a browser tab, one Durable Object per pairing, storing nothing.
+- **Desktop companion** ([server/](server)) — a small Node server you run on your computer. Runs OCR ([PaddleOCR models on ONNX Runtime](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr), no Python), writes received text to the clipboard, shows the pairing QR, and serves the phone app.
+- **Phone app, browser** ([src/mobile/](src/mobile)) — zero install. Scan the pairing QR with the phone's camera and it opens in the browser: from copycam.app ([p/](p)) for the browser version, from the companion ([mobile.html](mobile.html)) otherwise.
+- **Shared core** ([shared/](shared)) — the sealed protocol (`crypto.js`, `host.js`), the relay's framing (`relay.js`), and turning the recogniser's output into words on the photo (`reading.js`, `geometry.js`), used by both forms.
 - **Landing page + interactive demo** ([index.html](index.html) + [src/App.jsx](src/App.jsx)) — the marketing page, ported from the original Claude Design prototype.
 
 A native iPhone and Android app is coming soon. It will speak the same encrypted protocol to the same companion.
 
 ## Run it from a git checkout
 
-(To just use CopyCam, `npx copycam` above is all you need. This is for working on the code.)
+(To just use CopyCam, copycam.app or `npx copycam` above is all you need. This is for working on the code.)
 
 ```
 npm install

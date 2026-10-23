@@ -1,7 +1,7 @@
 // Writes THIRD_PARTY_NOTICES.md: every package that `npx copycam` installs, by
 // licence, plus the full licence text of the packages whose code is copied into
-// the built web bundles in dist/ (those travel inside CopyCam's own files, so
-// their notices must too). It reads package-lock.json, so the list is exactly
+// the built web bundles in dist/ and dist-site/ (those travel inside CopyCam's
+// own files, so their notices must too). It reads package-lock.json, so the list is exactly
 // what a user gets; a test fails when the committed file has gone stale.
 //
 //   node scripts/make-notices.mjs
@@ -10,10 +10,23 @@ import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
 
-// Code from these is bundled into dist/assets (the phone app and the landing
-// page). react-dom carries scheduler with it. They are dev dependencies, because
-// users never install them: they only get what the bundle already contains.
-const BUNDLED = ['react', 'react-dom', 'scheduler', '@noble/ciphers'];
+// Code from these is bundled into built web pages: dist/assets (the phone app
+// and the landing page) and dist-site/assets (copycam.app, whose /app/ page
+// reads text in the browser and draws the pairing QR code). react-dom carries
+// scheduler with it, and qrcode carries dijkstrajs. Some are dev dependencies,
+// because users never install them: they only get what the bundle contains.
+const BUNDLED = [
+  'react',
+  'react-dom',
+  'scheduler',
+  '@noble/ciphers',
+  'onnxruntime-web',
+  'ppu-paddle-ocr',
+  'ppu-ocv',
+  'zxing-wasm',
+  'qrcode',
+  'dijkstrajs',
+];
 
 const licenceOf = (entry, dir) => {
   let l = entry.license;
@@ -29,9 +42,13 @@ const licenceOf = (entry, dir) => {
   return l || 'UNKNOWN';
 };
 
-const licenceText = (dir) => {
+// The package's own licence file, or, for a package published without one
+// (onnxruntime-web), the text kept for it in licenses/.
+const licenceText = (dir, name, rootDir) => {
   const file = fs.readdirSync(dir).find((f) => /^licen[cs]e(\.|$)/i.test(f));
-  return file ? fs.readFileSync(path.join(dir, file), 'utf8').replace(/\r\n/g, '\n').trim() : null;
+  const kept = path.join(rootDir, 'licenses', `${name.replace('/', '__')}.txt`);
+  const source = file ? path.join(dir, file) : fs.existsSync(kept) ? kept : null;
+  return source ? fs.readFileSync(source, 'utf8').replace(/\r\n/g, '\n').trim() : null;
 };
 
 export function buildNotices(rootDir = root) {
@@ -44,7 +61,7 @@ export function buildNotices(rootDir = root) {
     const dir = path.join(rootDir, key);
     const id = `${name}@${entry.version}`;
     if (BUNDLED.includes(name) && !key.slice('node_modules/'.length).includes('node_modules/')) {
-      bundled.push({ name, version: entry.version, licence: licenceOf(entry, dir), text: licenceText(dir) });
+      bundled.push({ name, version: entry.version, licence: licenceOf(entry, dir), text: licenceText(dir, name, rootDir) });
     }
     if (entry.dev || entry.devOptional) continue; // build tools are not shipped
     const l = licenceOf(entry, dir);
@@ -60,14 +77,16 @@ export function buildNotices(rootDir = root) {
     `CopyCam is free software under the [GNU General Public License v3.0](https://github.com/copycam/copycam/blob/main/LICENSE). It is built on the open-source work below, and it carries each licence with it. All ${total} packages that \`npx copycam\` installs use permissive licences that are compatible with the GPL-3.0.`,
   );
   out.push('## Code inside CopyCam\'s web bundles');
-  out.push('These are copied into the built phone app and landing page that ship with CopyCam, so their full notices are reproduced here.');
+  out.push(
+    "These are copied into CopyCam's built web pages: the phone app that ships with the companion, and copycam.app, whose browser version reads text and draws its pairing code with them. Their full notices are reproduced here.",
+  );
   for (const b of bundled) {
     out.push(`### ${b.name} ${b.version}: ${b.licence}`);
     out.push(b.text ? '```text\n' + b.text + '\n```' : '(licence file not found in the package)');
   }
   out.push('## Text-recognition models');
   out.push(
-    'The default models ship in the package under the Apache License 2.0. See [NOTICE.md](https://github.com/copycam/copycam/blob/main/NOTICE.md) and [the licence text](https://github.com/copycam/copycam/blob/main/licenses/Apache-2.0.txt).',
+    'The default models ship in the package, and copycam.app serves the same files to the browser version, under the Apache License 2.0. See [NOTICE.md](https://github.com/copycam/copycam/blob/main/NOTICE.md) and [the licence text](https://github.com/copycam/copycam/blob/main/licenses/Apache-2.0.txt).',
   );
   out.push('## Everything `npx copycam` installs');
   out.push('Each package keeps its own licence file inside its folder in `node_modules`. Listed by licence:');

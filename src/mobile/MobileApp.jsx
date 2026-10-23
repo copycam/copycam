@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { loadKey, forgetKey, call, isConnectionError, isPairingRejected } from './api.js';
+import * as lan from './api.js';
+import { isConnectionError, isPairingRejected } from './api.js';
 import { downscalePhoto, blobToBytes, frameToJpeg, computeFrame, rotateBlob, CHROME } from './image.js';
 import { toB64u } from '../../shared/crypto.js';
 import ImageReview from './ImageReview.jsx';
@@ -8,11 +9,26 @@ import { SCRIPTS, scriptLabel } from './scripts.js';
 const ACC = '#CFFF3B';
 
 // What each failure tells the user — the same wording and the same ways out as
-// the native app, so the two clients stay one product.
+// the native app, so the two clients stay one product. A phone linked to a
+// copycam.app tab ('web') reaches it through the internet, so the Wi-Fi isn't
+// what to check there: the tab is.
 const COPY = {
-  unreachable:
-    'Check CopyCam is still running on your computer and that both are on the same Wi-Fi. If its address changed, rescanning the QR it shows always re-links.',
-  lostMidScan: 'The photo didn’t reach your computer. Check it’s still running and on the same Wi-Fi.',
+  lan: {
+    unreachable:
+      'Check CopyCam is still running on your computer and that both are on the same Wi-Fi. If its address changed, rescanning the QR it shows always re-links.',
+    lostMidScan: 'The photo didn’t reach your computer. Check it’s still running and on the same Wi-Fi.',
+    sendUnreachable: 'Couldn’t reach your computer. Check it’s running and on the same Wi-Fi.',
+    unpaired: "Start CopyCam on your computer and scan the QR code it shows with your phone camera. That's the whole setup.",
+    safety: 'end-to-end encrypted · use Wi-Fi you trust',
+  },
+  web: {
+    unreachable:
+      'Check copycam.app is still open on your computer. If you closed it, open it again: this phone reconnects by itself.',
+    lostMidScan: 'The photo didn’t reach your computer. Check copycam.app is still open there.',
+    sendUnreachable: 'Couldn’t reach your computer. Check copycam.app is still open there.',
+    unpaired: "Open copycam.app on your computer and scan the QR code it shows with your phone camera. That's the whole setup.",
+    safety: 'end-to-end encrypted',
+  },
   pairingRejected:
     'Your computer no longer recognises this phone — its pairing code has changed. Scan the QR on its screen again.',
   noText: 'Nothing readable inside the frame. Move closer so the text fills it, and make sure it’s well lit.',
@@ -21,10 +37,14 @@ const COPY = {
 // A connection problem offers a retry and a rescan; a scan problem just goes
 // back to the camera. Retrying the connection after a photo with no text in it
 // was pointless, and that was the only button on offer.
-const connectionProblem = (e) => ({
+const connectionProblem = (e, words) => ({
   kind: 'connection',
-  message: isPairingRejected(e) ? COPY.pairingRejected : COPY.unreachable,
+  message: isPairingRejected(e) ? COPY.pairingRejected : words.unreachable,
 });
+
+// A computer's name reads well mid-sentence ("Can’t reach your Mac") but
+// starts the linked pill, where it wants a capital.
+const capitalised = (name) => name.charAt(0).toUpperCase() + name.slice(1);
 
 const ctaPrimary = {
   border: 'none',
@@ -134,9 +154,20 @@ function SafetyNote({ text, color = '#9a9a92' }) {
 // The real CopyCam phone app. Same visual language as the landing demo, but
 // full-screen and driven by actual capture -> encrypted OCR -> clipboard send.
 // Phases: unpaired | connecting | idle | scanning | review | sending | sent | error
-export default function MobileApp() {
+//
+// `transport` is how it reaches the computer: straight over the Wi-Fi to the
+// companion (api.js, the default), or through copycam.app's relay to a browser
+// tab (relay.js, with mode 'web').
+export default function MobileApp({ transport = lan, mode = 'lan' }) {
+  const { loadKey, forgetKey, call } = transport;
+  const words = COPY[mode] ?? COPY.lan;
   const [phase, setPhase] = useState('connecting');
   const [pcName, setPcName] = useState('');
+  // the scripts the computer's reader has, when it says (a copycam.app tab has
+  // fewer than the companion); null means all of them
+  const [readable, setReadable] = useState(null);
+  // the computer has the text but is waiting for a click to copy it
+  const [pending, setPending] = useState(false);
   // captured photo {url,width,height} + word geometry for the overlay review
   const [photo, setPhoto] = useState(null);
   const [geo, setGeo] = useState(null);
@@ -271,12 +302,14 @@ export default function MobileApp() {
     call(keyRef.current, 'hello', {})
       .then((ack) => {
         setPcName(ack.name);
+        setReadable(Array.isArray(ack.scripts) ? ack.scripts : null);
         setPhase('idle');
       })
       .catch((e) => {
-        setProblem(connectionProblem(e));
+        setProblem(connectionProblem(e, words));
         setPhase('error');
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the transport is fixed for the page's life
   }, []);
 
   // Try again stays on the problem screen and shows progress on its own button,
@@ -287,10 +320,11 @@ export default function MobileApp() {
     try {
       const ack = await call(keyRef.current, 'hello', {});
       setPcName(ack.name);
+      setReadable(Array.isArray(ack.scripts) ? ack.scripts : null);
       setProblem(null);
       setPhase('idle');
     } catch (e) {
-      setProblem(connectionProblem(e));
+      setProblem(connectionProblem(e, words));
     } finally {
       setRetrying(false);
     }
@@ -308,6 +342,7 @@ export default function MobileApp() {
       clearTimeout(resetTimer.current);
       stopCamera();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the transport is fixed for the page's life
   }, [connect, stopCamera]);
 
   // Bring the viewfinder up as soon as we're linked.
@@ -324,12 +359,15 @@ export default function MobileApp() {
     setGeo(null);
   }, []);
 
+  // the stored choice, unless this computer's reader doesn't have it
+  const usable = (id) => (!readable || readable.includes(id) ? id : (readable[0] ?? 'auto'));
+
   const submitJpeg = async ({ blob, width, height }) => {
     setPhase('scanning');
     clearPhoto();
     try {
       const bytes = await blobToBytes(blob);
-      const ack = await call(keyRef.current, 'ocr', { img: toB64u(bytes), script });
+      const ack = await call(keyRef.current, 'ocr', { img: toB64u(bytes), script: usable(script) });
       // a photo of just a Wi-Fi QR carries no text, and is still a good scan
       if (!ack.words?.length && !ack.wifi) {
         setProblem({ kind: 'scan', title: 'No text found', message: COPY.noText });
@@ -355,7 +393,7 @@ export default function MobileApp() {
     } catch (e) {
       setProblem(
         isConnectionError(e) || isPairingRejected(e)
-          ? { kind: 'connection', message: isPairingRejected(e) ? COPY.pairingRejected : COPY.lostMidScan }
+          ? { kind: 'connection', message: isPairingRejected(e) ? COPY.pairingRejected : words.lostMidScan }
           : { kind: 'scan', title: 'That scan didn’t work', message: 'Something went wrong reading the photo. Try again.' },
       );
       setPhase('error');
@@ -424,7 +462,8 @@ export default function MobileApp() {
     setSendError(null);
     setPhase('sending');
     try {
-      await call(keyRef.current, 'clip', { text });
+      const ack = await call(keyRef.current, 'clip', { text });
+      setPending(Boolean(ack?.pending));
       clearPhoto();
       setPhase('sent');
       resetTimer.current = setTimeout(() => setPhase('idle'), 2300);
@@ -435,7 +474,7 @@ export default function MobileApp() {
         isPairingRejected(e)
           ? 'Your computer no longer recognises this phone. Retake, then rescan its QR.'
           : isConnectionError(e)
-            ? 'Couldn’t reach your computer. Check it’s running and on the same Wi-Fi.'
+            ? words.sendUnreachable
             : 'Your computer couldn’t put that on its clipboard.',
       );
       setPhase('review');
@@ -458,6 +497,7 @@ export default function MobileApp() {
 
   const review = phase === 'review' || phase === 'sending';
   const sending = phase === 'sending';
+  const choosable = readable ? SCRIPTS.filter((s) => readable.includes(s.id)) : SCRIPTS;
 
   // ---- full-screen instruction states -------------------------------------
   if (phase === 'unpaired' || phase === 'error' || phase === 'connecting') {
@@ -474,7 +514,7 @@ export default function MobileApp() {
         )}
         {phase === 'unpaired' && (
           <div style={{ fontSize: 14.5, lineHeight: 1.5, color: '#55554f', maxWidth: 280 }}>
-            Start CopyCam on your computer and scan the QR code it shows with your phone camera. That's the whole setup.
+            {words.unpaired}
           </div>
         )}
         {phase === 'error' && problem && (
@@ -500,7 +540,7 @@ export default function MobileApp() {
           </div>
         )}
         <div style={{ position: 'absolute', bottom: 'max(28px, env(safe-area-inset-bottom))', left: 0, right: 0 }}>
-          <SafetyNote text="end-to-end encrypted · use Wi-Fi you trust" />
+          <SafetyNote text={words.safety} />
         </div>
       </div>
     );
@@ -564,7 +604,7 @@ export default function MobileApp() {
       >
         <div style={{ ...ctlPill, gap: 8, cursor: 'default', flex: '0 1 auto', minWidth: 0, maxWidth: FRAME.landscape ? 260 : '100%' }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: ACC, flex: 'none', boxShadow: `0 0 8px ${ACC}` }} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{pcName} — linked</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{capitalised(pcName)} — linked</span>
         </div>
 
         {/* capture controls: flash (where the browser allows it) + script */}
@@ -588,6 +628,7 @@ export default function MobileApp() {
               Camera app
             </button>
           )}
+          {choosable.length > 1 && (
           <button
             onClick={() => {
               setPickerY(0);
@@ -600,8 +641,9 @@ export default function MobileApp() {
               <circle cx="8" cy="8" r="6.6" fill="none" stroke="#fff" strokeWidth="1.4" />
               <path d="M1.6 8h12.8M8 1.4c3.4 3.7 3.4 9.5 0 13.2M8 1.4c-3.4 3.7-3.4 9.5 0 13.2" fill="none" stroke="#fff" strokeWidth="1.4" />
             </svg>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{scriptLabel(script)}</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{scriptLabel(usable(script))}</span>
           </button>
+          )}
         </div>
         )}
       </div>
@@ -638,7 +680,7 @@ export default function MobileApp() {
               </div>
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
-            {SCRIPTS.map((s) => (
+            {choosable.map((s) => (
               <button
                 key={s.id}
                 onClick={() => chooseScript(s.id)}
@@ -751,7 +793,9 @@ export default function MobileApp() {
       {phase === 'sent' && (
         <div style={{ position: 'absolute', top: 'max(90px, calc(env(safe-area-inset-top) + 60px))', left: '50%', transform: 'translateX(-50%)', animation: 'ccToast .35s cubic-bezier(.2,.9,.3,1.2) forwards', display: 'flex', alignItems: 'center', gap: 10, background: '#FAFAF7', borderRadius: 999, padding: '10px 18px 10px 12px', boxShadow: '0 10px 30px rgba(0,0,0,.4)', whiteSpace: 'nowrap' }}>
           <span style={{ width: 24, height: 24, borderRadius: '50%', background: ACC, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#161616', flex: 'none' }}>✓</span>
-          <span style={{ fontSize: 13.5, fontWeight: 650, color: '#161616' }}>On {pcName}’s clipboard</span>
+          <span style={{ fontSize: 13.5, fontWeight: 650, color: '#161616' }}>
+            {pending ? `Sent · click Copy on ${pcName}` : `On ${pcName}’s clipboard`}
+          </span>
         </div>
       )}
     </div>

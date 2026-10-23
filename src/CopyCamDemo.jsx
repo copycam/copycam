@@ -271,7 +271,7 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
         >
           <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: 2, color: '#6b6b64' }}>PAIR ONCE</div>
 
-          {/* what the computer shows: the command, then the code to scan */}
+          {/* what the computer shows: copycam.app, and the code to scan */}
           <div style={{ width: 214, background: '#fff', borderRadius: 16, boxShadow: '0 2px 14px rgba(0,0,0,.07),0 0 0 1px rgba(0,0,0,.05)', overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 12px', background: '#F1F0EC' }}>
               {[0, 1, 2].map((i) => (
@@ -280,16 +280,19 @@ export default function CopyCamDemo({ accentColor = '#CFFF3B', deviceName = 'My 
               <span style={{ marginLeft: 6, fontSize: 10.5, color: '#6b6b64', fontWeight: 600 }}>{deviceName}</span>
             </div>
             <div style={{ padding: '14px 14px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-              <div style={{ alignSelf: 'flex-start', fontFamily: MONO, fontSize: 12.5, color: '#26261f' }}>
-                <span style={{ color: '#6b6b64' }}>$ </span>npx copycam
+              <div style={{ alignSelf: 'stretch', display: 'flex', alignItems: 'center', gap: 6, background: '#F1F0EC', borderRadius: 999, padding: '5px 10px', fontSize: 11.5, color: '#26261f' }}>
+                <svg width="8" height="10" viewBox="0 0 10 12" aria-hidden="true" style={{ flex: 'none' }}>
+                  <rect x="0.75" y="5" width="8.5" height="6.25" rx="1.5" fill="none" stroke="#6b6b64" strokeWidth="1.5" />
+                  <path d="M2.5 5V3.5a2.5 2.5 0 015 0V5" fill="none" stroke="#6b6b64" strokeWidth="1.5" />
+                </svg>
+                copycam.app
               </div>
               <canvas ref={canvasRef} width={200} height={200} role="img" aria-label="QR code shown on the computer" style={{ width: 138, height: 138, display: 'block', imageRendering: 'pixelated' }} />
             </div>
           </div>
 
           <div style={{ fontSize: 14.5, lineHeight: 1.5, color: '#55554f', maxWidth: 270 }}>
-            On your computer, run <b style={{ fontFamily: MONO, fontSize: 13 }}>npx copycam</b>. Point your phone at the QR code it shows. Same
-            Wi‑Fi, no account.
+            On your computer, open <b>copycam.app</b>. Point your phone at the QR code it shows. Nothing to install, no account.
           </div>
           {phase === 'connecting' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: '#161616', fontWeight: 600 }}>

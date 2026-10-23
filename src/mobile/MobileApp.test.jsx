@@ -443,3 +443,36 @@ describe('MobileApp', () => {
     globalThis.Image = origImage;
   });
 });
+
+// Linked to a copycam.app tab through the relay, rather than to the companion
+// over the Wi-Fi: the same app, worded for where the computer actually is.
+describe('MobileApp linked to a copycam.app tab', () => {
+  const web = { loadKey: vi.fn(), forgetKey: vi.fn(), call: vi.fn() };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('sends people to copycam.app to start', () => {
+    web.loadKey.mockReturnValue(null);
+    render(<MobileApp transport={web} mode="web" />);
+    expect(screen.getByText(/open copycam\.app on your computer/i)).toBeInTheDocument();
+    expect(screen.queryByText(/wi-fi you trust/i)).toBeNull();
+  });
+
+  it('names the computer, and offers only the scripts its reader has', async () => {
+    web.loadKey.mockReturnValue({ key: KEY, room: 'r'.repeat(22) });
+    web.call.mockResolvedValueOnce({ name: 'your Mac', scripts: ['auto'] });
+    render(<MobileApp transport={web} mode="web" />);
+    expect(await screen.findByText('Your Mac — linked')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /change text language/i })).toBeNull();
+  });
+
+  it('points at the tab, not the Wi-Fi, when the computer can’t be reached', async () => {
+    web.loadKey.mockReturnValue({ key: KEY, room: 'r'.repeat(22) });
+    web.call.mockRejectedValueOnce(new CallError('unreachable', 'unreachable'));
+    render(<MobileApp transport={web} mode="web" />);
+    expect(await screen.findByText(/check copycam\.app is still open/i)).toBeInTheDocument();
+    expect(screen.queryByText(/same wi-fi/i)).toBeNull();
+  });
+});

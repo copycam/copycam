@@ -8,9 +8,9 @@ describe('App', () => {
     // the logo: "Copy" alone also names the command's copy button
     expect(screen.getByText('Cam').parentElement).toHaveTextContent(/^CopyCam$/);
     expect(screen.getByText(/point your phone at any text/i)).toBeInTheDocument();
-    expect(screen.getByText(/pair once — scan the qr/i)).toBeInTheDocument();
+    expect(screen.getByText(/open copycam.app on your computer, and scan its code once/i)).toBeInTheDocument();
     expect(screen.getByText(/frame the text and tap/i)).toBeInTheDocument();
-    expect(screen.getByText(/on your pc's clipboard/i)).toBeInTheDocument();
+    expect(screen.getByText(/send — it's on your computer's clipboard/i)).toBeInTheDocument();
   });
 
   it('renders the demo inside the device frame starting on the pair screen', () => {
@@ -21,9 +21,11 @@ describe('App', () => {
 
   it('tells a visitor how to get it, and links to the code and the help', () => {
     render(<App />);
-    expect(screen.getByRole('link', { name: /get copycam/i })).toHaveAttribute('href', '#get');
+    // the web version is the way in; the companion is the alternative
+    expect(screen.getByRole('link', { name: /start copycam/i })).toHaveAttribute('href', '/app/');
+    expect(screen.getByRole('link', { name: /open copycam\.app\/app/i })).toHaveAttribute('href', '/app/');
     expect(screen.getByRole('heading', { name: 'Get CopyCam' }).closest('section')).toHaveAttribute('id', 'get');
-    // the demo's pairing screen shows the command too, so look inside the Get CopyCam section
+    // look inside the Get CopyCam section
     const get = screen.getByRole('heading', { name: 'Get CopyCam' }).closest('section');
     expect(within(get).getByText('npx copycam')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();

@@ -52,9 +52,10 @@
     "start": "npm run build && node server/index.js",
     "prepack": "node scripts/fetch-models.mjs && npm run build",
     "models": "node scripts/fetch-models.mjs",
-    "build:site": "vite build --config vite.site.config.js && node scripts/build-legal.mjs",
+    "build:site": "node scripts/fetch-models.mjs && vite build --config vite.site.config.js && node scripts/build-legal.mjs",
     "notices": "node scripts/make-notices.mjs",
-    "smoke": "node scripts/smoke-install.mjs"
+    "smoke": "node scripts/smoke-install.mjs",
+    "dev:site": "npm run build:site && wrangler dev"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.3",
@@ -77,11 +78,13 @@
     "@vitejs/plugin-react": "^6.0.3",
     "jsdom": "^29.1.1",
     "marked": "^18.1.1",
+    "onnxruntime-web": "^1.26.0",
     "oxlint": "^1.71.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "vite": "^8.1.1",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wrangler": "^4.152.0"
   },
   "overrides": {
     "adm-zip": "^0.6.0"

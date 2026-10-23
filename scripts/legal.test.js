@@ -70,7 +70,8 @@ describe('third-party notices', () => {
 
   it('reproduces the licence text of everything bundled into the web build', () => {
     const md = fs.readFileSync(path.join(root, 'THIRD_PARTY_NOTICES.md'), 'utf8');
-    for (const name of ['react', 'react-dom', 'scheduler', '@noble/ciphers']) expect(md).toContain('### ' + name + ' ');
+    const bundled = ['react', 'react-dom', 'scheduler', '@noble/ciphers', 'onnxruntime-web', 'ppu-paddle-ocr', 'ppu-ocv', 'zxing-wasm', 'qrcode'];
+    for (const name of bundled) expect(md).toContain('### ' + name + ' ');
     expect(md).not.toContain('licence file not found');
   });
 

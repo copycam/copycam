@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useOnPhone } from './useOnPhone.js';
 
 // The sections under the hero: how to get CopyCam, what it promises, and the
 // footer. Every claim here is one the code and SECURITY.md back up.
@@ -82,57 +83,91 @@ function CopyCommand({ command, accentColor }) {
   );
 }
 
+// On a phone: the way to get from here to the computer, which is to send the
+// link there.
+function PhoneVisitor({ accentColor }) {
+  const [sent, setSent] = useState(false);
+  const share = async () => {
+    try {
+      await navigator.share({ title: 'CopyCam', url: 'https://copycam.app/app/' });
+      setSent(true);
+    } catch {
+      // dismissed, or no share sheet: the address is right there to type
+    }
+  };
+  return (
+    <div style={{ ...card, background: '#161616', color: '#fff', marginBottom: 16 }}>
+      <p style={{ ...title, color: '#fff' }}>You&rsquo;re on your phone</p>
+      <p style={{ ...body, color: '#d8d8d0' }}>
+        CopyCam starts on your computer. Open <strong style={{ color: '#fff' }}>copycam.app</strong> there, then scan the
+        code it shows with this phone&rsquo;s camera.
+      </p>
+      {typeof navigator !== 'undefined' && navigator.share && (
+        <button
+          type="button"
+          onClick={share}
+          style={{ alignSelf: 'flex-start', border: 'none', borderRadius: 999, padding: '10px 18px', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, background: accentColor, color: '#161616', cursor: 'pointer' }}
+        >
+          {sent ? 'Sent ✓' : 'Send the link to your computer'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function GetCopyCam({ accentColor }) {
+  const onPhone = useOnPhone();
   return (
     <section id="get" style={section}>
       <h2 style={heading}>Get CopyCam</h2>
+      {onPhone && <PhoneVisitor accentColor={accentColor} />}
       <div style={row}>
-        <div style={card}>
-          <span style={tag}>1 · YOUR COMPUTER</span>
-          <p style={title}>Run one command</p>
-          <CopyCommand command="npx copycam" accentColor={accentColor} />
+        <div style={{ ...card, flex: '1.4 1 320px' }}>
+          <span style={tag}>IN YOUR BROWSER · NOTHING TO INSTALL</span>
+          <p style={title}>Open CopyCam on your computer</p>
+          <a
+            href="/app/"
+            style={{ alignSelf: 'flex-start', background: '#161616', color: '#fff', textDecoration: 'none', borderRadius: 999, padding: '11px 20px', fontSize: 14.5, fontWeight: 700 }}
+          >
+            Open copycam.app/app <span style={{ color: accentColor }}>&rarr;</span>
+          </a>
           <p style={body}>
-            It shows a QR code and keeps running while you scan. No account, nothing to sign up for.
+            It shows a QR code. Scan it with your phone&rsquo;s camera and open the link: the phone doesn&rsquo;t even need
+            to be on the same Wi&#8209;Fi. Then frame the text, drag across the words you want, and tap Send.
           </p>
           <p style={note}>
-            Needs <a href="https://nodejs.org/">Node.js</a> 20.19 or newer. Runs on Windows, macOS and Linux, and is
-            tested on all three with every change. On Linux, start it with{' '}
+            Photos are read in that tab, on your computer. On the way they pass through copycam.app sealed end to end, so
+            it can&rsquo;t read them. The first visit downloads the text reader (44&nbsp;MB) once. Text lands on the clipboard
+            while the tab is in front; otherwise it waits there for one click.
+          </p>
+        </div>
+        <div style={card}>
+          <span style={tag}>DESKTOP COMPANION</span>
+          <p style={title}>Or run it on your own network</p>
+          <CopyCommand command="npx copycam" accentColor={accentColor} />
+          <p style={body}>
+            Nothing leaves your Wi&#8209;Fi, the text goes straight onto the clipboard with no click, and it reads more
+            scripts: Cyrillic, Arabic, Greek, Thai and Hindi among them.
+          </p>
+          <p style={note}>
+            Needs <a href="https://nodejs.org/">Node.js</a> 20.19 or newer; tested on Windows, macOS and Linux with every
+            change. The phone must be on the same Wi&#8209;Fi, and the first time its browser warns the connection
+            isn&rsquo;t private: that&rsquo;s CopyCam&rsquo;s own certificate.{' '}
+            <a href={`${HELP}#this-connection-is-not-private`}>Why that&rsquo;s expected</a>. On Linux, start it with{' '}
             <code>ONNXRUNTIME_NODE_INSTALL=skip npx copycam</code> to skip a 270&nbsp;MB add-on it doesn&rsquo;t use.
           </p>
         </div>
-        <div style={card}>
-          <span style={tag}>2 · YOUR PHONE</span>
-          <p style={title}>Scan the QR code</p>
-          <p style={body}>
-            On the same Wi&#8209;Fi, point the camera at the code and open the link. It runs in the phone&rsquo;s
-            browser, so there is nothing to install.
-          </p>
-          <p style={note}>
-            The first time, the browser warns the connection isn&rsquo;t private. That is CopyCam&rsquo;s own
-            certificate: tap Show Details (or Advanced), then Visit Website.{' '}
-            <a href={`${HELP}#this-connection-is-not-private`}>Why that&rsquo;s expected</a>
-          </p>
-        </div>
-        <div style={card}>
-          <span style={tag}>3 · ANY TEXT</span>
-          <p style={title}>Point, pick, send</p>
-          <p style={body}>
-            Frame the text, drag across the words you want and tap Send. It&rsquo;s on your computer&rsquo;s
-            clipboard.
-          </p>
-          <p style={note}>
-            A native iPhone and Android app is coming soon. Something not working?{' '}
-            <a href={HELP}>Troubleshooting</a>
-          </p>
-        </div>
       </div>
+      <p style={{ ...note, marginTop: 16 }}>
+        A native iPhone and Android app is coming soon. Something not working? <a href={HELP}>Troubleshooting</a>
+      </p>
     </section>
   );
 }
 
 const PROMISES = [
-  ['End-to-end encrypted', 'Every photo and every word is sealed with AES-256-GCM. The key only travels inside the QR code on your screen.'],
-  ['Read on your computer', 'Text recognition runs on your PC. Nothing goes to a cloud service, and there is no account.'],
+  ['End-to-end encrypted', 'Every photo and every word is sealed with AES-256-GCM. The key only travels inside the QR code on your screen, so not even copycam.app can read what it passes along.'],
+  ['Read on your computer', 'Text recognition runs on your computer, in the browser tab or the companion. Nothing goes to a cloud reading service, and there is no account.'],
   ['No ads. Not a single one.', 'Not in the app, not on the pairing page, not here.'],
   ['Open source', 'GPL-3.0. Every line is on GitHub, so every claim on this page can be checked.'],
 ];
@@ -150,7 +185,7 @@ export function Promises() {
         ))}
       </div>
       <p style={{ ...note, marginTop: 16 }}>
-        Use it on Wi&#8209;Fi you trust. What it protects against, and what it doesn&rsquo;t, is in{' '}
+        What it protects against, and what it doesn&rsquo;t, is in{' '}
         <a href={`${REPO}/blob/main/SECURITY.md`}>SECURITY.md</a>.
       </p>
     </section>

@@ -48,7 +48,7 @@ describe('CopyCamDemo', () => {
     render(<CopyCamDemo deviceName="Test PC" />);
     expect(screen.getByText('PAIR ONCE')).toBeInTheDocument();
     // the QR is shown by the computer; it is the phone that scans it
-    expect(screen.getAllByText('npx copycam').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('copycam.app').length).toBeGreaterThan(0);
     expect(screen.getByText(/point your phone at the qr code it shows/i)).toBeInTheDocument();
     expect(screen.queryByText(/waiting for scan/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/copycam\.app\/link/i)).not.toBeInTheDocument();
