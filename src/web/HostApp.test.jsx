@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, act, fireEvent } from '@testing-library/react';
+import { render, screen, act, fireEvent, within } from '@testing-library/react';
 import HostApp from './HostApp.jsx';
 import { seal, open, fromB64u } from '../../shared/crypto.js';
 
@@ -91,7 +91,9 @@ describe('HostApp', () => {
     expect(open(key, res.body, 'clip-ack').pending).toBe(true);
     expect(writeText).not.toHaveBeenCalled();
     expect(document.title).toMatch(/text ready/i);
-    expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
+    // a notice says why, with its own Copy button beside the one in the list
+    expect(screen.getByText('Text from your phone is here')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Copy' })).toHaveLength(2);
 
     document.hasFocus.mockReturnValue(true);
     await act(async () => {
@@ -99,6 +101,7 @@ describe('HostApp', () => {
     });
     expect(writeText).toHaveBeenCalledWith('later');
     expect(screen.getByText('Copied ✓')).toBeInTheDocument();
+    expect(screen.queryByText('Text from your phone is here')).toBeNull();
     document.hasFocus.mockRestore();
   });
 
@@ -112,7 +115,9 @@ describe('HostApp', () => {
     });
     document.execCommand = vi.fn(() => false);
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+      // the notice's own button
+      const notice = screen.getByText('Text from your phone is here').closest('[role=status]');
+      fireEvent.click(within(notice).getByRole('button', { name: 'Copy' }));
     });
     expect(screen.getByText(/won’t let the page copy/)).toBeInTheDocument();
     document.hasFocus.mockRestore();

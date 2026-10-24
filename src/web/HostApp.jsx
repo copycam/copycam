@@ -164,6 +164,67 @@ function Received({ items, onCopy, onClear }) {
   );
 }
 
+function ClipboardIcon({ color = '#161616' }) {
+  return (
+    <svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true" style={{ flex: 'none', marginTop: 2 }}>
+      <rect x="1" y="2.5" width="12" height="12.5" rx="2" fill="none" stroke={color} strokeWidth="1.6" />
+      <rect x="4" y="1" width="6" height="3.2" rx="1" fill={color} />
+    </svg>
+  );
+}
+
+// A browser only lets the page in front write the clipboard: said once,
+// plainly, beside the steps, so the one extra click never comes as a surprise.
+function ClipboardTip() {
+  return (
+    <p style={{ ...note, display: 'flex', gap: 8, alignItems: 'flex-start', background: '#f1f0ec', borderRadius: 10, padding: '9px 12px', color: '#3d3d38' }}>
+      <ClipboardIcon />
+      <span>
+        <strong>Keep this tab open.</strong> While it’s the tab you’re looking at, text goes straight onto your clipboard. If you’re
+        in another window, it waits here for one click on Copy.
+      </span>
+    </p>
+  );
+}
+
+// Text arrived while this tab wasn't in front: the browser wouldn't let the
+// page copy it, so say so where it can't be missed, with the button that does.
+function WaitingNotice({ onCopy }) {
+  return (
+    <div
+      role="status"
+      style={{
+        position: 'fixed',
+        left: '50%',
+        bottom: 'max(20px, env(safe-area-inset-bottom))',
+        transform: 'translateX(-50%)',
+        width: 'min(440px, calc(100vw - 32px))',
+        boxSizing: 'border-box',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        background: '#161616',
+        color: '#fff',
+        borderRadius: 16,
+        padding: '14px 14px 14px 18px',
+        boxShadow: '0 14px 40px rgba(0,0,0,.28)',
+        animation: 'ccToastUp .3s cubic-bezier(.2,.9,.3,1.2)',
+        zIndex: 10,
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 700 }}>Text from your phone is here</div>
+        <div style={{ fontSize: 12.5, lineHeight: 1.45, color: '#cfcfc6', marginTop: 2 }}>
+          Click Copy to put it on your clipboard. Browsers only let the tab you’re looking at copy by itself.
+        </div>
+      </div>
+      <button type="button" onClick={onCopy} style={{ ...button, background: ACC, color: '#161616', flex: 'none' }}>
+        Copy
+      </button>
+    </div>
+  );
+}
+
 // reader: from createReader(); connect: connectHost from relay-host.js. Both
 // are passed in so the page can be tested without a worker or a relay.
 export default function HostApp({ reader, connect, storage = globalThis.localStorage, nav = globalThis.navigator }) {
@@ -177,6 +238,7 @@ export default function HostApp({ reader, connect, storage = globalThis.localSto
   const [announcement, setAnnouncement] = useState('');
   const [attempt, setAttempt] = useState(0); // bumps to reconnect after being replaced
   const waiting = useRef(null); // the item still to be copied when the tab comes back to the front
+  const [pending, setPending] = useState(null); // the same item, for the notice on screen
   const nextId = useRef(0);
   const name = useMemo(() => computerName(nav), [nav]);
   const touch = useOnPhone();
@@ -202,6 +264,7 @@ export default function HostApp({ reader, connect, storage = globalThis.localSto
   const markCopied = useCallback((id) => {
     setItems((list) => list.map((i) => (i.id === id ? { ...i, copied: true } : i)));
     if (waiting.current?.id === id) waiting.current = null;
+    setPending((p) => (p?.id === id ? null : p));
     document.title = 'CopyCam';
   }, []);
 
@@ -267,6 +330,7 @@ export default function HostApp({ reader, connect, storage = globalThis.localSto
             setItems((list) => [item, ...list].slice(0, MAX_ITEMS));
             if (document.hasFocus() && (await copy(item))) return { copied: true };
             waiting.current = item;
+            setPending(item);
             document.title = '• Text ready · CopyCam';
             setAnnouncement('Text from your phone is ready to copy');
             alert();
@@ -344,6 +408,7 @@ export default function HostApp({ reader, connect, storage = globalThis.localSto
                   <li>Point the phone at text, and tap the shutter.</li>
                   <li>Drag across the words you want, and tap Send.</li>
                 </ol>
+                <ClipboardTip />
                 <p style={note}>Your phone doesn’t need to be on this Wi-Fi. It stays linked: next time, just open the page on both.</p>
                 {relay.phones > 0 && (
                   <div>
@@ -355,7 +420,8 @@ export default function HostApp({ reader, connect, storage = globalThis.localSto
               </>
             ) : (
               <>
-                <p style={body}>Point it at text and send: it lands here. Keep this tab open while you scan.</p>
+                <p style={body}>Point it at text and send: it lands here.</p>
+                <ClipboardTip />
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                   <button type="button" style={link} onClick={() => setShowCode(true)}>
                     Link another phone
@@ -379,6 +445,7 @@ export default function HostApp({ reader, connect, storage = globalThis.localSto
               onClear={() => {
                 setItems([]);
                 waiting.current = null;
+                setPending(null);
                 document.title = 'CopyCam';
               }}
             />
@@ -407,6 +474,7 @@ export default function HostApp({ reader, connect, storage = globalThis.localSto
         <div aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
           {announcement}
         </div>
+        {pending && <WaitingNotice onCopy={() => copy(pending, true)} />}
       </div>
     </div>
   );

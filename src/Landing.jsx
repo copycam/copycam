@@ -135,10 +135,19 @@ export function GetCopyCam({ accentColor }) {
             It shows a QR code. Scan it with your phone&rsquo;s camera and open the link: the phone doesn&rsquo;t even need
             to be on the same Wi&#8209;Fi. Then frame the text, drag across the words you want, and tap Send.
           </p>
+          <p style={{ ...note, display: 'flex', gap: 8, alignItems: 'flex-start', background: '#f1f0ec', borderRadius: 10, padding: '9px 12px', color: '#3d3d38' }}>
+            <svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true" style={{ flex: 'none', marginTop: 2 }}>
+              <rect x="1" y="2.5" width="12" height="12.5" rx="2" fill="none" stroke="#161616" strokeWidth="1.6" />
+              <rect x="4" y="1" width="6" height="3.2" rx="1" fill="#161616" />
+            </svg>
+            <span>
+              <strong>Keep the tab open.</strong> While it&rsquo;s the tab you&rsquo;re looking at, text goes straight onto your
+              clipboard. If you&rsquo;re in another window, it waits there for one click on Copy.
+            </span>
+          </p>
           <p style={note}>
             Photos are read in that tab, on your computer. On the way they pass through copycam.app sealed end to end, so
-            it can&rsquo;t read them. The first visit downloads the text reader (44&nbsp;MB) once. Text lands on the clipboard
-            while the tab is in front; otherwise it waits there for one click.
+            it can&rsquo;t read them. The first visit downloads the text reader (44&nbsp;MB) once.
           </p>
         </div>
         <div style={card}>
@@ -158,8 +167,15 @@ export function GetCopyCam({ accentColor }) {
           </p>
         </div>
       </div>
-      <p style={{ ...note, marginTop: 16 }}>
-        A native iPhone and Android app is coming soon. Something not working? <a href={HELP}>Troubleshooting</a>
+      <div className="cc-soon" style={{ marginTop: 16 }}>
+        <span className="cc-soon-tag">COMING SOON</span>
+        <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>CopyCam for iPhone and Android</p>
+        <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'rgba(255,255,255,.9)', flex: '1 1 260px' }}>
+          A native app for the phone side: one tap to open, and the same private pairing.
+        </p>
+      </div>
+      <p style={{ ...note, marginTop: 12 }}>
+        Something not working? <a href={HELP}>Troubleshooting</a>
       </p>
     </section>
   );
