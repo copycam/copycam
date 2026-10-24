@@ -6,11 +6,13 @@ import { useOnPhone } from './useOnPhone.js';
 
 const DEVICE_W = 402;
 const DEVICE_H = 874;
+// The demo phone is shown a little under life size, so the page around it has room.
+const MAX_SCALE = 0.85;
 
 // The demo phone is drawn at a real phone's size; on a narrower screen (most
 // visitors arrive from a phone) it is scaled down to fit instead of being cut off.
 function useDeviceScale() {
-  const measure = () => (typeof window === 'undefined' ? 1 : Math.min(1, (window.innerWidth - 32) / DEVICE_W));
+  const measure = () => (typeof window === 'undefined' ? 1 : Math.min(MAX_SCALE, (window.innerWidth - 32) / DEVICE_W));
   const [scale, setScale] = useState(measure);
   useEffect(() => {
     const onResize = () => setScale(measure());
@@ -30,6 +32,8 @@ export default function App({ accentColor = '#CFFF3B', deviceName = 'My MacBook'
   const [pulse, setPulse] = useState(false);
   const pulseTimer = useRef(null);
   const scale = useDeviceScale();
+  // the demo sits below the text, not beside it, when the screen is narrow
+  const stacked = typeof window !== 'undefined' && window.innerWidth < 760;
   const onPhone = useOnPhone();
 
   const triggerPulse = () => {
@@ -114,7 +118,7 @@ export default function App({ accentColor = '#CFFF3B', deviceName = 'My MacBook'
             )}
           </a>
           <div style={{ fontSize: 12, color: '#6b6b64', fontFamily: 'ui-monospace,Menlo,monospace' }}>
-            interactive demo &mdash; try it {scale < 1 ? '↓' : '→'}
+            interactive demo &mdash; try it {stacked ? '↓' : '→'}
           </div>
         </div>
 
