@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>CopyCam lab · phone</title>
+    <link rel="stylesheet" href="/src/lab/lab.css" />
+  </head>
+  <body>
+    <main>
+      <h1>WebRTC lab · phone side</h1>
+      <p id="paired">Not paired: scan the lab code on the computer.</p>
+      <label><input type="checkbox" id="camera" checked /> Use the camera during the test, like the real app</label>
+      <video id="video" playsinline muted width="96" height="72"></video>
+      <button type="button" id="run" disabled>Run the test</button>
+      <h2>Result</h2>
+      <pre id="result">(none yet)</pre>
+      <button type="button" id="copy" disabled>Copy the result</button>
+      <h2>Log</h2>
+      <pre id="log"></pre>
+    </main>
+    <script type="module" src="/src/lab/phone-page.js"></script>
+  </body>
+</html>

@@ -84,6 +84,7 @@
     "react-dom": "^19.2.7",
     "vite": "^8.1.1",
     "vitest": "^4.1.10",
+    "werift": "^0.25.2",
     "wrangler": "^4.152.0"
   },
   "overrides": {

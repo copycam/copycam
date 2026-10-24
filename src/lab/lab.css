@@ -1,0 +1,10 @@
+body { margin: 0; background: #f1f0ec; color: #161616; font-family: -apple-system, 'Helvetica Neue', system-ui, sans-serif; }
+main { max-width: 720px; margin: 0 auto; padding: 20px 16px 48px; display: flex; flex-direction: column; gap: 12px; }
+h1 { font-size: 22px; margin: 0; }
+h2 { font-size: 15px; margin: 8px 0 0; }
+pre { background: #fff; border-radius: 10px; padding: 12px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+button { align-self: flex-start; border: 0; border-radius: 999px; padding: 11px 20px; font: inherit; font-weight: 700; background: #161616; color: #fff; }
+button:disabled { opacity: 0.4; }
+code { font-size: 11px; overflow-wrap: anywhere; }
+.small { font-size: 13px; color: #55554f; }
+video { border-radius: 8px; background: #000; }

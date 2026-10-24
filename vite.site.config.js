@@ -53,6 +53,9 @@ export default defineConfig({
         main: resolve(root, 'index.html'),
         app: resolve(root, 'app/index.html'),
         phone: resolve(root, 'p/index.html'),
+        // the WebRTC lab (src/lab): hidden test pages, not linked from anywhere
+        'lab-pc': resolve(root, 'app/lab/index.html'),
+        'lab-phone': resolve(root, 'p/lab/index.html'),
       },
     },
   },
