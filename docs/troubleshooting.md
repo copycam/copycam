@@ -1,10 +1,14 @@
 # Troubleshooting
 
-Almost every problem is one of three things: the phone can't reach the computer, the browser is blocking something, or the text was read wrong. Find the heading that matches what you see. The first section is for the browser version (copycam.app); the rest is mostly about the desktop companion (`npx copycam`).
+Almost every problem is one of three things: the phone can't reach the computer, the browser is blocking something, or the text was read wrong. Find the heading that matches what you see. The first section is for phones linked through copycam.app, which is how both the browser version and the desktop companion link by default; the rest is about the companion's own Wi-Fi link (`npx copycam --local-only`).
 
-## In the browser (copycam.app)
+## Linked through copycam.app
 
-**The phone says it can't reach your computer.** The copycam.app tab has to stay open on the computer while you scan. If you closed it, open [copycam.app/app](https://copycam.app/app/) again: the phone reconnects by itself, with no rescan. The phone and the computer don't need to share a Wi-Fi network, but both need to be online.
+**The phone says it can't reach your computer.** The copycam.app tab (or the companion) has to stay open on the computer while you scan. If you closed it, open [copycam.app/app](https://copycam.app/app/) again, or start `npx copycam` again: the phone reconnects by itself, with no rescan. The phone and the computer don't need to share a Wi-Fi network, but both need to be online.
+
+**It says "Linked · through copycam.app" even on the same Wi-Fi.** The direct route needs both devices on the same network, and a router that lets devices on it reach each other: guest networks, and routers with *AP isolation* or *client isolation* on, don't. A VPN on either device can stop it too. There's nothing to fix: everything works the same through copycam.app, sealed end to end. The phone tries the direct route again each time you come back to the page.
+
+**On iPhone, CopyCam on the Home Screen asks to be linked again.** An iPhone keeps a Home Screen app's storage apart from Safari's, so the app doesn't know the pairing you made in Safari. Tap **Scan the code with this page** and point it at the code on your computer once.
 
 **"CopyCam is open in another tab."** Only one tab can be linked at a time, and the newest one takes over. Click **Use this tab instead** in the tab you want, or close the other one.
 
@@ -18,9 +22,9 @@ Almost every problem is one of three things: the phone can't reach the computer,
 
 **Other languages.** The browser version reads Latin-alphabet languages, Chinese, Japanese and Korean. For Cyrillic, Arabic, Greek, Hindi, Thai and the other scripts, use the desktop companion.
 
-## The phone says it can't reach your computer
+## The phone says it can't reach your computer (companion, Wi-Fi link)
 
-With the desktop companion, the phone shows *"Check CopyCam is still running on your computer and that both are on the same Wi-Fi."* Work down this list and stop at the first fix that works.
+When the companion shows its own Wi-Fi link (with `--local-only`, or when it says it couldn't reach copycam.app), the phone has to reach it over the Wi-Fi, and shows *"Check CopyCam is still running on your computer and that both are on the same Wi-Fi."* when it can't. Work down this list and stop at the first fix that works.
 
 1. **Is CopyCam still running?** The terminal window it started in has to stay open. If you closed it, start it again.
 2. **Same network?** The phone must be on the same Wi-Fi as the PC. Mobile data doesn't count, and neither does a guest network. A PC on Ethernet works if its router also serves the Wi-Fi.
@@ -37,7 +41,7 @@ With the desktop companion, the phone shows *"Check CopyCam is still running on 
 
 ## "This connection is not private"
 
-The first time the browser app opens, the phone warns that the connection isn't private. This is expected. CopyCam makes its own security certificate, because a certificate from a public authority can't be issued for an address on your home network. Tap **Show Details** (iPhone) or **Advanced** (Android), then **Visit This Website** or **Proceed**.
+This only happens with the companion's own Wi-Fi link (`--local-only`, or when it couldn't reach copycam.app); the copycam.app link loads without a warning. The first time the companion's page opens, the phone warns that the connection isn't private. This is expected. CopyCam makes its own security certificate, because a certificate from a public authority can't be issued for an address on your home network. Tap **Show Details** (iPhone) or **Advanced** (Android), then **Visit This Website** or **Proceed**.
 
 What this does and doesn't mean is spelled out in [SECURITY.md](../SECURITY.md): everything you send is encrypted with a key that only travels in the QR code, but on a network where someone is actively tampering with traffic, the page itself could be swapped. Use CopyCam on Wi-Fi you trust, such as your own home network, and not on a café or airport network.
 

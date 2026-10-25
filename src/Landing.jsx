@@ -115,6 +115,31 @@ function PhoneVisitor({ accentColor }) {
   );
 }
 
+// The two ways a phone reaches its computer: both come with CopyCam, and it
+// picks between them by itself.
+const ROUTES = [
+  ['DIRECT ON YOUR WI‑FI', 'Straight to each other', 'When your phone and computer share a Wi‑Fi, they talk directly, with nothing in between.'],
+  ['THROUGH COPYCAM.APP', 'From anywhere', 'On any other network, they meet through copycam.app. Everything is sealed end to end, so it can’t read a thing.'],
+];
+
+function Routes() {
+  return (
+    <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <p style={{ ...title, fontSize: 15 }}>Two ways to connect, both included</p>
+      <div style={row}>
+        {ROUTES.map(([t, h, b]) => (
+          <div key={t} style={{ ...card, flex: '1 1 260px', gap: 6 }}>
+            <span style={{ ...tag, background: '#ecebe6', color: '#161616' }}>{t}</span>
+            <p style={title}>{h}</p>
+            <p style={body}>{b}</p>
+          </div>
+        ))}
+      </div>
+      <p style={note}>Scan the code once: after that, CopyCam picks the way by itself, and the phone shows which one it&rsquo;s on.</p>
+    </div>
+  );
+}
+
 export function GetCopyCam({ accentColor }) {
   const onPhone = useOnPhone();
   return (
@@ -132,8 +157,8 @@ export function GetCopyCam({ accentColor }) {
             Open copycam.app/app <span style={{ color: accentColor }}>&rarr;</span>
           </a>
           <p style={body}>
-            It shows a QR code. Scan it with your phone&rsquo;s camera and open the link: the phone doesn&rsquo;t even need
-            to be on the same Wi&#8209;Fi. Then frame the text, drag across the words you want, and tap Send.
+            It shows a QR code. Scan it once with your phone&rsquo;s camera and open the link. Then frame the text, drag
+            across the words you want, and tap Send.
           </p>
           <p style={{ ...note, display: 'flex', gap: 8, alignItems: 'flex-start', background: '#f1f0ec', borderRadius: 10, padding: '9px 12px', color: '#3d3d38' }}>
             <svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true" style={{ flex: 'none', marginTop: 2 }}>
@@ -146,32 +171,34 @@ export function GetCopyCam({ accentColor }) {
             </span>
           </p>
           <p style={note}>
-            Photos are read in that tab, on your computer. On the way they pass through copycam.app sealed end to end, so
-            it can&rsquo;t read them. The first visit downloads the text reader (44&nbsp;MB) once.
+            Photos are read in that tab, on your computer, and travel sealed end to end. The first visit downloads the text
+            reader (44&nbsp;MB) once.
           </p>
         </div>
         <div style={card}>
           <span style={tag}>DESKTOP COMPANION</span>
-          <p style={title}>Or run it on your own network</p>
+          <p style={title}>Or run it on your computer</p>
           <CopyCommand command="npx copycam" accentColor={accentColor} />
           <p style={body}>
-            Nothing leaves your Wi&#8209;Fi, the text goes straight onto the clipboard with no click, and it reads more
-            scripts: Cyrillic, Arabic, Greek, Thai and Hindi among them.
+            The text goes straight onto the clipboard with no click, and it reads more scripts: Cyrillic, Arabic, Greek,
+            Thai and Hindi among them. It pairs and connects the same two ways.
           </p>
           <p style={note}>
             Needs <a href="https://nodejs.org/">Node.js</a> 20.19 or newer; tested on Windows, macOS and Linux with every
-            change. The phone must be on the same Wi&#8209;Fi, and the first time its browser warns the connection
-            isn&rsquo;t private: that&rsquo;s CopyCam&rsquo;s own certificate.{' '}
-            <a href={`${HELP}#this-connection-is-not-private`}>Why that&rsquo;s expected</a>. On Linux, start it with{' '}
-            <code>ONNXRUNTIME_NODE_INSTALL=skip npx copycam</code> to skip a 270&nbsp;MB add-on it doesn&rsquo;t use.
+            change. To keep everything on your own network, start it with <code>npx copycam --local-only</code>: the phone
+            then has to be on the same Wi&#8209;Fi, and its browser warns once about CopyCam&rsquo;s own certificate.{' '}
+            <a href={`${HELP}#this-connection-is-not-private`}>Why that&rsquo;s expected</a>. On Linux, add{' '}
+            <code>ONNXRUNTIME_NODE_INSTALL=skip</code> in front to skip a 270&nbsp;MB add-on it doesn&rsquo;t use.
           </p>
         </div>
       </div>
+      <Routes />
       <div className="cc-soon" style={{ marginTop: 16 }}>
         <span className="cc-soon-tag">COMING SOON</span>
-        <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>CopyCam for iPhone and Android</p>
-        <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'rgba(255,255,255,.9)', flex: '1 1 260px' }}>
-          A native app for the phone side: one tap to open, and the same private pairing.
+        <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>CopyCam apps for your phone and your computer</p>
+        <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'rgba(255,255,255,.9)', flex: '1 1 300px' }}>
+          For iPhone and Android, and for Windows and Mac. One tap to open, no browser tab to keep open, and the same two
+          ways to connect, straight from the apps.
         </p>
       </div>
       <p style={{ ...note, marginTop: 12 }}>

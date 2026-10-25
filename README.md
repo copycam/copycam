@@ -14,15 +14,15 @@
 2. **Frame the text** and tap the shutter.
 3. **Drag across the words you want** and tap Send. Paste on your computer.
 
-The photo is read in that browser tab, on your computer, and travels there through copycam.app sealed end to end, so the site can't read it.
+The photo is read in that browser tab, on your computer. On the same Wi-Fi the phone and the computer talk directly; from anywhere else they meet through copycam.app, sealed end to end so the site can't read a thing. CopyCam picks the way by itself, and the phone shows which one it's on.
 
-**Or run the desktop companion** on your own network (it needs [Node.js](https://nodejs.org/) 20.19 or newer):
+**Or run the desktop companion** (it needs [Node.js](https://nodejs.org/) 20.19 or newer):
 
 ```
 npx copycam
 ```
 
-It prints a QR code to scan the same way, from a phone on the same Wi-Fi. Nothing leaves your network, text lands on the clipboard with no click, and it also reads Cyrillic, Arabic, Greek, Thai, Hindi and more. The first time, the phone's browser warns that the connection isn't private: that's CopyCam's own certificate. Tap Show Details (or Advanced), then Visit Website. ([Why that's expected.](docs/troubleshooting.md#this-connection-is-not-private))
+It prints a QR code to scan the same way, and connects the same two ways. Text lands on the clipboard with no click, and it also reads Cyrillic, Arabic, Greek, Thai, Hindi and more. To keep everything on your own network, start it with `npx copycam --local-only`: the phone then has to be on the same Wi-Fi, and the first time its browser warns that the connection isn't private, because that's CopyCam's own certificate. ([Why that's expected.](docs/troubleshooting.md#this-connection-is-not-private))
 
 [Website and live demo](https://copycam.app) · [Troubleshooting](docs/troubleshooting.md) · [How it's secured](SECURITY.md) · [Changelog](CHANGELOG.md)
 
@@ -39,13 +39,13 @@ It prints a QR code to scan the same way, from a phone on the same Wi-Fi. Nothin
 This repo contains both forms of CopyCam, the phone app they share, and the website:
 
 - **Browser version** ([app/](app) + [src/web/](src/web)) — copycam.app/app, the computer's side in a browser tab. It shows the pairing QR, reads photos in a worker with the same model and reading code as the companion (compiled to WebAssembly), and puts the text on the clipboard.
-- **Relay** ([worker/](worker)) — the Cloudflare Worker behind copycam.app: it serves the site and passes sealed messages between a phone and a browser tab, one Durable Object per pairing, storing nothing.
+- **Relay** ([worker/](worker)) — the Cloudflare Worker behind copycam.app: it serves the site and passes sealed messages between a phone and its computer (a browser tab or the companion), one Durable Object per pairing, storing nothing. It also carries the sealed introduction for the direct route.
 - **Desktop companion** ([server/](server)) — a small Node server you run on your computer. Runs OCR ([PaddleOCR models on ONNX Runtime](https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr), no Python), writes received text to the clipboard, shows the pairing QR, and serves the phone app.
 - **Phone app, browser** ([src/mobile/](src/mobile)) — zero install. Scan the pairing QR with the phone's camera and it opens in the browser: from copycam.app ([p/](p)) for the browser version, from the companion ([mobile.html](mobile.html)) otherwise.
-- **Shared core** ([shared/](shared)) — the sealed protocol (`crypto.js`, `host.js`), the relay's framing (`relay.js`), and turning the recogniser's output into words on the photo (`reading.js`, `geometry.js`), used by both forms.
+- **Shared core** ([shared/](shared)) — the sealed protocol (`crypto.js`, `host.js`), the two routes (`relay.js` and `relay-host.js` through copycam.app, `direct.js` for the WebRTC channel on the same Wi-Fi), and turning the recogniser's output into words on the photo (`reading.js`, `geometry.js`), used by both forms.
 - **Landing page + interactive demo** ([index.html](index.html) + [src/App.jsx](src/App.jsx)) — the marketing page, ported from the original Claude Design prototype.
 
-A native iPhone and Android app is coming soon. It will speak the same encrypted protocol to the same companion.
+Native apps for iPhone and Android, and for Windows and Mac, are coming soon. They will speak the same encrypted protocol, by the same two routes.
 
 ## Run it from a git checkout
 

@@ -1,8 +1,8 @@
 # Privacy policy
 
-_Last updated: 23 October 2026_
+_Last updated: 25 October 2026_
 
-**The short version.** CopyCam has no accounts, no tracking and no ads. Your photos and the text you send go from your phone to your own computer, encrypted end to end. In the browser version they pass through copycam.app on the way, sealed so that it can't read them, and it keeps nothing. This website counts visits to its information pages with Cloudflare's analytics and keeps nothing else about you.
+**The short version.** CopyCam has no accounts, no tracking and no ads. Your photos and the text you send go from your phone to your own computer, encrypted end to end: directly when both are on the same Wi-Fi, otherwise through copycam.app, sealed so that it can't read them. It keeps nothing. This website counts visits to its information pages with Cloudflare's analytics and keeps nothing else about you.
 
 ## Who I am
 
@@ -18,9 +18,14 @@ This covers CopyCam used with nothing installed: the page you open on your compu
 
 **The text is read on your computer.** Your phone sends each photo to the copycam.app tab on your computer, and that tab reads the text itself, in your browser. The text you pick goes back the same way and onto your computer's clipboard. No photo and no text is read, kept or seen anywhere else.
 
-**How they reach each other: the relay.** Your phone and that tab can't connect to each other directly, so both connect to a small relay at copycam.app, which passes messages between them. Every message is encrypted end to end with a key that only travels inside the QR code on your screen, so the relay, and I, can't read any of them. The relay keeps nothing: it holds a message only for the moment it takes to pass it on, writes nothing to storage, and logs nothing. What it does see, because it has to, is that a phone and a computer are connected to the same "room" (a random address made by your computer's browser), when they send messages, and how large those are. Like any website, it also sees the IP address each connection comes from. The relay runs on Cloudflare's network (see "Who else handles data").
+**How they reach each other: two ways.** CopyCam picks between them by itself, and the phone shows which one it's on. Every message, on either route, is encrypted end to end with a key that only travels inside the QR code on your screen, so neither copycam.app nor I can read any of them.
 
-**What stays in your browsers.** On your computer, the copycam.app page keeps its pairing key and its room address in the browser's storage, so your phone stays linked next time, and keeps the text reader's files (about 44 MB) in the browser's cache so they download only once. The text you receive is listed on the page only until you close the tab or clear the list; it is never saved. On your phone, the browser keeps the pairing key, the room address and your chosen language. Clearing the site's data for copycam.app in either browser forgets all of it; "Unlink phones" on the computer page makes a new key, so phones linked before can no longer send anything.
+- **Direct on your Wi-Fi.** When your phone and computer are on the same network, they open a direct connection (WebRTC) and talk straight to each other. To set it up they exchange one short introduction through copycam.app's relay, which says where to find each device on your local network. It is sealed with your pairing key like everything else, so the relay can't read it. No other server is used to set up the connection, and it never runs across the internet: only local addresses are offered. Once it's open, messages go directly. A photo may still go through the relay, sealed, when that route has recently been the faster of the two.
+- **Through copycam.app.** On any other network, both devices connect to a small relay at copycam.app, which passes the sealed messages between them.
+
+The relay keeps nothing: it holds a message only for the moment it takes to pass it on, writes nothing to storage, and logs nothing. What it does see, because it has to, is that a phone and a computer are connected to the same "room" (a random address made by your computer), when they send messages, and how large those are; on the direct route, that is only the introduction and anything sent through the relay instead. Like any website, it also sees the IP address each connection comes from. The relay runs on Cloudflare's network (see "Who else handles data").
+
+**What stays in your browsers.** On your computer, the copycam.app page keeps its pairing key and its room address in the browser's storage, so your phone stays linked next time, and keeps the text reader's files (about 44 MB) in the browser's cache so they download only once. The text you receive is listed on the page only until you close the tab or clear the list; it is never saved. On your phone, the browser keeps the pairing key, the room address and your chosen language, and so does CopyCam on your Home Screen if you add it there (an iPhone keeps a Home Screen app's storage separate from Safari's, which is why it asks you to scan the code once more). Clearing the site's data for copycam.app in either browser forgets all of it; "Unlink phones" on the computer page makes a new key, so phones linked before can no longer send anything.
 
 **Notifications, if you turn them on.** The computer page can show a notification when text arrives while you're in another window. It says only that text is ready; it never shows the text.
 
@@ -30,13 +35,15 @@ This covers CopyCam used with nothing installed: the page you open on your compu
 
 This covers the `copycam` program you can run on your computer instead, and the CopyCam page it serves to your phone's browser.
 
-**Your photos and text stay on your devices.** When you scan, the phone sends the photo to your computer over your own Wi-Fi, encrypted with a key that only travels inside the QR code on your screen. Your computer reads the text, puts it on its clipboard, and does not save the photo. None of it passes through me or any server of mine. I can't see it, and I have no way to.
+**Your photos and text stay sealed.** When you scan, the phone sends the photo to your computer encrypted with a key that only travels inside the QR code on your screen, the same two ways as the browser version: directly over your Wi-Fi when the phone is on the same network, otherwise through copycam.app's relay, which can't read it (see above). Your computer reads the text, puts it on its clipboard, and does not save the photo.
 
-**What the companion keeps on your computer.** A folder called `.copycam` in your user folder holds the pairing key (`key.json`) and the security certificate CopyCam makes for itself (`tls.json`). If the backup reader is ever needed, its English language data is kept there too. Downloaded text-reading models are kept in `.cache/ppu-paddle-ocr`. On your phone, the browser remembers the pairing key and your chosen language for the CopyCam page. Deleting these folders, or clearing the page's data in your phone's browser, forgets all of it.
+**Only on your own Wi-Fi, if you prefer.** Start it with `npx copycam --local-only` and the companion never contacts copycam.app: the phone then reaches it only over your own Wi-Fi, and nothing of it passes through me or any server of mine.
+
+**What the companion keeps on your computer.** A folder called `.copycam` in your user folder holds the pairing key and the secret that makes this computer the one in its relay room (`key.json`), and the security certificate CopyCam makes for itself (`tls.json`). If the backup reader is ever needed, its English language data is kept there too. Downloaded text-reading models are kept in `.cache/ppu-paddle-ocr`. On your phone, the browser remembers the pairing key and your chosen language for the CopyCam page. Deleting these folders, or clearing the page's data in your phone's browser, forgets all of it.
 
 **What CopyCam never does.** In either version: no accounts, no analytics in the app, no crash reports and no advertising. The text you send is never written to a log: the terminal only shows how many characters were copied.
 
-**The few connections it makes.** While you use it, none. A few things do reach out, and none of them carries a photo or any text:
+**The few connections it makes.** While it runs, it keeps a connection open to copycam.app's relay, so your phone can reach it from any network; it carries only sealed messages (not with `--local-only`). Besides that, a few things reach out, and none of them carries a photo or any text:
 
 - Installing it with `npx copycam` downloads it from the npm registry, which is run by GitHub.
 - On 64-bit Linux, installing also lets one of its components (ONNX Runtime) download an optional graphics-card add-on (about 270 MB) from Microsoft's NuGet service (`api.nuget.org`). CopyCam doesn't use it. To prevent the download, set the environment variable `ONNXRUNTIME_NODE_INSTALL=skip` before installing. Windows, macOS and other Linux machines don't make this download.

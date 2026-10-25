@@ -40,4 +40,12 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/copycam/copycam');
     expect(screen.getByRole('link', { name: 'Troubleshooting' }).getAttribute('href').endsWith('docs/troubleshooting.md')).toBe(true);
   });
+
+  it('presents the two ways to connect as things you get, not a choice', () => {
+    render(<App />);
+    expect(screen.getByText('Two ways to connect, both included')).toBeInTheDocument();
+    expect(screen.getByText('DIRECT ON YOUR WI‑FI')).toBeInTheDocument();
+    expect(screen.getByText('THROUGH COPYCAM.APP')).toBeInTheDocument();
+    expect(screen.getByText(/picks the way by itself/)).toBeInTheDocument();
+  });
 });
