@@ -3,26 +3,30 @@ import { toFrames, createAssembler, splitRouted, roomFor, PING } from '../../sha
 
 // WebRTC lab: can a phone page and a computer (a copycam.app tab, or the
 // companion in Node) open a direct data channel on the same Wi-Fi, using the
-// existing relay only to introduce them? Throwaway: nothing here is part of
-// the product. The introduction (offer and answer, which carry the devices'
-// local addresses) is sealed with a lab pairing key, so the relay only sees
-// opaque boxes. No STUN or TURN server is used, so a channel that opens can
+// existing relay only to introduce them? And how fast can it carry a photo?
+// Throwaway: nothing here is part of the product. The introduction (offer and
+// answer, which carry the devices' local addresses) is sealed with a lab
+// pairing key, so the relay only sees opaque boxes. No STUN or TURN server is
+// used and only local candidates are offered, so a channel that opens can
 // only be a direct one on the local network.
+//
+// Round 2 measures how the channel is fed: the same photo-sized message sent
+// in pieces of different sizes, ordered and unordered, each way.
 
-export const SIZE = 2_500_000; // a photo-sized message
-const CHUNK = 16 * 1024; // safe on every browser's data channel
+export const SIZE = 1_500_000; // about what a scan sends, once sealed
 const GATHER_MS = 2500;
 const DIRECT_MS = 8000;
 const RTC_CONFIG = { iceServers: [] };
+const VARIANTS = [
+  { name: '16 KB pieces', chunk: 16 * 1024, ordered: true },
+  { name: '64 KB pieces', chunk: 64 * 1024, ordered: true },
+  { name: 'largest pieces', chunk: 'max', ordered: true },
+  { name: '64 KB pieces, unordered', chunk: 64 * 1024, ordered: false },
+];
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
-
-function randomBlock() {
-  const b = new Uint8Array(CHUNK);
-  crypto.getRandomValues(b);
-  return b;
-}
+const mbps = (bytes, ms) => (ms > 0 ? +((bytes / ms) * 1000 / 1e6).toFixed(2) : null);
 
 // The whole SDP, candidates included, once gathering finishes (no trickle:
 // one message each way keeps the lab simple).
@@ -54,31 +58,57 @@ export function candidatesIn(sdp) {
   });
 }
 
-async function sendBytes(ch, size) {
-  const block = randomBlock();
+async function sendBytes(ch, size, chunk) {
+  const block = new Uint8Array(chunk);
+  crypto.getRandomValues(block.subarray(0, Math.min(chunk, 65536)));
   if ('bufferedAmountLowThreshold' in ch) ch.bufferedAmountLowThreshold = 256 * 1024;
   let sent = 0;
   while (sent < size) {
-    if (typeof ch.bufferedAmount === 'number' && ch.bufferedAmount > 2 * 1024 * 1024) {
+    if (typeof ch.bufferedAmount === 'number' && ch.bufferedAmount > 1024 * 1024) {
       await new Promise((r) => {
         ch.onbufferedamountlow = () => r();
-        setTimeout(r, 200);
+        setTimeout(r, 50);
       });
       continue;
     }
-    const n = Math.min(CHUNK, size - sent);
-    ch.send(n === CHUNK ? block : block.subarray(0, n));
+    const n = Math.min(chunk, size - sent);
+    ch.send(n === chunk ? block : block.subarray(0, n));
     sent += n;
   }
 }
 
 const byteLength = (d) => (typeof d === 'string' ? -1 : d.byteLength ?? d.length);
 
-// Wires a channel for the transfer protocol:
-//   {k:'start', size} then `size` bytes; the receiver answers {k:'got'}.
-function channelProtocol(ch, onEvent) {
+// Events from one channel, waited for by kind (an event that arrives before
+// anyone waits is kept).
+function eventQueue() {
+  const seen = [];
+  const waiting = [];
+  return {
+    push(msg) {
+      const i = waiting.findIndex((w) => w.kind === msg.k);
+      if (i >= 0) waiting.splice(i, 1)[0].resolve(msg);
+      else seen.push(msg);
+    },
+    next(kind, ms = 60_000) {
+      const i = seen.findIndex((m) => m.k === kind);
+      if (i >= 0) return Promise.resolve(seen.splice(i, 1)[0]);
+      return new Promise((resolve, reject) => {
+        waiting.push({ kind, resolve });
+        setTimeout(() => reject(new Error(`no "${kind}" within ${ms / 1000}s`)), ms);
+      });
+    },
+  };
+}
+
+// The transfer protocol on a channel:
+//   sender: {k:'start', size, chunk}; receiver: {k:'ready'}
+//   sender: `size` bytes in `chunk` pieces; receiver: {k:'got'}
+// The receiver reports {k:'starting'} and {k:'received', size, chunk}.
+function channelProtocol(ch, events) {
   let expect = 0;
   let got = 0;
+  let chunk = 0;
   ch.binaryType = 'arraybuffer';
   ch.onmessage = ({ data }) => {
     const n = byteLength(data);
@@ -86,17 +116,32 @@ function channelProtocol(ch, onEvent) {
       const msg = JSON.parse(data);
       if (msg.k === 'start') {
         expect = msg.size;
+        chunk = msg.chunk;
         got = 0;
-      } else onEvent(msg);
+        events.push({ k: 'starting', at: now() });
+        ch.send(JSON.stringify({ k: 'ready' }));
+      } else events.push(msg);
       return;
     }
     got += n;
     if (expect && got >= expect) {
+      const size = expect;
       expect = 0;
       ch.send(JSON.stringify({ k: 'got' }));
-      onEvent({ k: 'received' });
+      events.push({ k: 'received', size, chunk, at: now() });
     }
   };
+}
+
+// Send `size` bytes and wait for the receiver to have them all; the clock
+// starts once the receiver is ready, so it measures the transfer alone.
+async function transfer(ch, events, size, chunk) {
+  ch.send(JSON.stringify({ k: 'start', size, chunk }));
+  await events.next('ready');
+  const t = now();
+  await sendBytes(ch, size, chunk);
+  await events.next('got');
+  return Math.round(now() - t);
 }
 
 function relaySocket({ url, WebSocketImpl, wsOptions, onMessage, onClose }) {
@@ -125,6 +170,29 @@ export function startComputer({ secret, key, relayUrl, WebSocketImpl = WebSocket
     for (const f of toFrames(head, body)) sock.ws.send(`${phone}\n${f}`);
   };
 
+  // Every channel the phone opens gets the same echo: what arrives goes back.
+  function serveChannel(channel) {
+    const events = eventQueue();
+    const echo = async () => {
+      for (;;) {
+        let msg;
+        try {
+          msg = await events.next('received', 10 * 60_000);
+        } catch {
+          return;
+        }
+        log(`${channel.label}: received ${msg.size} bytes in ${msg.chunk}-byte pieces; sending them back`);
+        try {
+          await transfer(channel, events, msg.size, msg.chunk);
+        } catch (e) {
+          log(`${channel.label}: sending back failed: ${e.message}`);
+        }
+      }
+    };
+    channelProtocol(channel, events);
+    echo();
+  }
+
   async function onOffer(phone, head, body) {
     let offer;
     try {
@@ -137,15 +205,8 @@ export function startComputer({ secret, key, relayUrl, WebSocketImpl = WebSocket
     const pc = new RTCPeerConnectionImpl(rtcConfig);
     peers.set(phone, pc);
     pc.ondatachannel = ({ channel }) => {
-      channel.onopen = () => log('direct channel open');
-      channelProtocol(channel, async (msg) => {
-        if (msg.k === 'received') {
-          log(`received ${SIZE} bytes direct; sending them back`);
-          channel.send(JSON.stringify({ k: 'start', size: SIZE }));
-          await sendBytes(channel, SIZE);
-        }
-      });
-      if (channel.readyState === 'open') log('direct channel open');
+      log(`channel "${channel.label}" from the phone`);
+      serveChannel(channel);
     };
     pc.oniceconnectionstatechange = () => log(`ICE ${pc.iceConnectionState}`);
     await pc.setRemoteDescription(offer);
@@ -196,7 +257,7 @@ export function startComputer({ secret, key, relayUrl, WebSocketImpl = WebSocket
 // The phone: runs the whole test and reports numbers.
 // ---------------------------------------------------------------------------
 export async function runPhoneTest({ room, key, relayUrl, log = () => {}, WebSocketImpl = WebSocket }) {
-  const r = { userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'node', size: SIZE };
+  const r = { round: 2, userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'node', size: SIZE };
   const waiters = new Map(); // id -> resolve
   const assembler = createAssembler();
   let pcThere = null;
@@ -251,28 +312,25 @@ export async function runPhoneTest({ room, key, relayUrl, log = () => {}, WebSoc
     const t = now();
     for (const f of toFrames({ id, t: 'blob' }, body)) sock.ws.send(f);
     await waitFor(`${id}g`, 60_000);
-    r.relayUpMs = Math.round(now() - t);
+    const up = Math.round(now() - t);
     const t2 = now();
     await waitFor(`${id}b`, 60_000);
-    r.relayDownMs = Math.round(now() - t2);
-    log(`relay: 2.5 MB up in ${r.relayUpMs} ms, back in ${r.relayDownMs} ms`);
+    const down = Math.round(now() - t2);
+    r.relay = { upMs: up, downMs: down, upMBps: mbps(SIZE, up), downMBps: mbps(SIZE, down) };
+    log(`relay: 1.5 MB up in ${up} ms, back in ${down} ms`);
   } catch (e) {
-    r.relayError = e.message;
+    r.relay = { error: e.message };
     log(`relay transfer: ${e.message}`);
   }
 
   // Direct: offer, sealed answer, channel.
   const pc = new RTCPeerConnection(RTC_CONFIG);
-  const ch = pc.createDataChannel('copycam-lab', { ordered: true });
-  const events = [];
-  let onEvent = () => {};
-  channelProtocol(ch, (msg) => {
-    events.push(msg);
-    onEvent(msg);
-  });
+  const first = pc.createDataChannel('lab-ordered', { ordered: true });
+  const firstEvents = eventQueue();
+  channelProtocol(first, firstEvents);
   const td = now();
   const opened = new Promise((resolve, reject) => {
-    ch.onopen = resolve;
+    first.onopen = resolve;
     pc.oniceconnectionstatechange = () => {
       log(`ICE ${pc.iceConnectionState}`);
       if (pc.iceConnectionState === 'failed') reject(new Error('ICE failed: no direct path between the two devices'));
@@ -295,7 +353,8 @@ export async function runPhoneTest({ room, key, relayUrl, log = () => {}, WebSoc
     await Promise.race([opened, wait(DIRECT_MS).then(() => Promise.reject(new Error(`no direct channel within ${DIRECT_MS / 1000}s`)))]);
     r.directConnectMs = Math.round(now() - td);
     r.route = 'direct';
-    log(`direct: channel open ${r.directConnectMs} ms after starting`);
+    r.maxMessageSize = pc.sctp?.maxMessageSize ?? null;
+    log(`direct: channel open ${r.directConnectMs} ms after starting (largest message ${r.maxMessageSize ?? 'unknown'})`);
 
     // which addresses it actually connected over
     try {
@@ -315,25 +374,31 @@ export async function runPhoneTest({ room, key, relayUrl, log = () => {}, WebSoc
       // stats are a bonus
     }
 
-    const tu = now();
-    const gotBack = new Promise((resolve) => {
-      onEvent = (msg) => msg.k === 'received' && resolve();
-    });
-    const acked = new Promise((resolve) => {
-      const prev = onEvent;
-      onEvent = (msg) => {
-        prev(msg);
-        if (msg.k === 'got') resolve();
-      };
-    });
-    ch.send(JSON.stringify({ k: 'start', size: SIZE }));
-    await sendBytes(ch, SIZE);
-    await Promise.race([acked, wait(60_000)]);
-    r.directUpMs = Math.round(now() - tu);
-    const tb = now();
-    await Promise.race([gotBack, wait(60_000)]);
-    r.directDownMs = Math.round(now() - tb);
-    log(`direct: 2.5 MB up in ${r.directUpMs} ms, back in ${r.directDownMs} ms`);
+    // The same message, fed to the channel four ways, each way and back.
+    r.direct = {};
+    const channels = { true: { ch: first, events: firstEvents } };
+    for (const v of VARIANTS) {
+      const chunk = v.chunk === 'max' ? Math.min(256 * 1024, r.maxMessageSize || 64 * 1024) : v.chunk;
+      try {
+        if (!channels[v.ordered]) {
+          const ch = pc.createDataChannel('lab-unordered', { ordered: false });
+          const events = eventQueue();
+          channelProtocol(ch, events);
+          await Promise.race([new Promise((res) => (ch.onopen = res)), wait(5000).then(() => Promise.reject(new Error('channel did not open')))]);
+          channels[v.ordered] = { ch, events };
+        }
+        const { ch, events } = channels[v.ordered];
+        const up = await transfer(ch, events, SIZE, chunk);
+        const starting = await events.next('starting');
+        const back = await events.next('received');
+        const down = Math.round(back.at - starting.at);
+        r.direct[v.name] = { chunk, upMs: up, downMs: down, upMBps: mbps(SIZE, up), downMBps: mbps(SIZE, down) };
+        log(`direct, ${v.name} (${chunk} B): up ${up} ms, back ${down} ms`);
+      } catch (e) {
+        r.direct[v.name] = { chunk, error: e.message };
+        log(`direct, ${v.name}: ${e.message}`);
+      }
+    }
   } catch (e) {
     r.route = 'relay (fallback)';
     r.directError = e.message;
