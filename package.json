@@ -1,6 +1,6 @@
 {
   "name": "copycam",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Point your phone at text and it lands on your computer's clipboard, over Wi-Fi.",
   "keywords": [
     "ocr",

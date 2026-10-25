@@ -29,6 +29,6 @@ Publishing is done by hand, from your own computer, because npm asks for your pa
    Then, in an empty folder, run `npx copycam@latest` and scan the QR code with a phone.
 7. **Tag it** so the repository records what was published:
    ```bash
-   git tag v0.1.1
-   git push origin v0.1.1
+   git tag v0.2.0
+   git push origin v0.2.0
    ```

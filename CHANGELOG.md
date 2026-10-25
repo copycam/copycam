@@ -2,6 +2,16 @@
 
 What changed in each release of the `copycam` package. The newest is first.
 
+## 0.2.0
+
+The phone now reaches the companion from any network, with no certificate warning, and directly when both are on the same Wi-Fi.
+
+- **The pairing code is now a copycam.app link.** The companion joins copycam.app's relay, so the phone opens the page from copycam.app (a real certificate: no more "not private" warning) and reaches your computer from any network, mobile data included. Everything stays sealed end to end: the relay can't read the photos or the text.
+- **Direct on your Wi-Fi.** When the phone and the computer share a network, they open a direct connection (WebRTC) by themselves and talk straight to each other; anywhere else, they go through copycam.app. The phone shows which: "Linked · direct on Wi-Fi" or "Linked · through copycam.app". The introduction that sets up the direct connection is sealed like every other message.
+- **`--local-only`: only connect on your own Wi-Fi.** The companion then never contacts copycam.app and works exactly as 0.1.x did. It also falls back to its own Wi-Fi link by itself when copycam.app can't be reached at start.
+- **Same pairing, same security.** One pairing key, one handler and one replay check for every route: a message used on one route can't be replayed on another. Your existing pairing key is kept; scan the new code once.
+- New dependencies: `werift` (WebRTC, MIT) and `ws` (WebSockets on Node 20, MIT). The companion points werift's STUN lookup at nothing, so it contacts no outside server.
+
 ## 0.1.1
 
 Nothing about how CopyCam runs has changed: the companion, the phone page and the text reading are the same as 0.1.0.
