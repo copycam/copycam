@@ -1,4 +1,5 @@
 import { open, seal, fromB64u, MAX_AGE_MS } from './crypto.js';
+import { validDescription } from './direct.js';
 
 // The computer's side of the phone protocol, whatever carries it: HTTP from the
 // companion (server/app.js), or the copycam.app relay to a browser tab
@@ -43,7 +44,7 @@ export function createNonceLedger(windowMs = 2 * MAX_AGE_MS) {
   };
 }
 
-export const ENDPOINTS = ['hello', 'ocr', 'clip'];
+export const ENDPOINTS = ['hello', 'ocr', 'clip', 'rtc'];
 
 // deps:
 //   ocr(bytes: Uint8Array, script?) -> { words, lineCount, rotation }
@@ -51,10 +52,12 @@ export const ENDPOINTS = ['hello', 'ocr', 'clip'];
 //   clipboard(text) -> anything; { copied: false } means the text is waiting
 //     for a click on the computer (a browser tab can't always write the
 //     clipboard by itself), and the phone is told so
+//   rtc?(offer) -> answer: the direct route's introduction (shared/direct.js);
+//     without it, the phone stays on the route it came by
 //   onEvent?(event)
 // info: extra fields for the hello answer (e.g. which scripts this reader has)
 export function createHost({ key, name, deps, info = {} }) {
-  const { clipboard, ocr, wifi, onEvent = () => {} } = deps;
+  const { clipboard, ocr, wifi, rtc, onEvent = () => {} } = deps;
   const nonces = createNonceLedger();
 
   // Decrypt + authenticate a request; enforce single-use nonces.
@@ -128,6 +131,26 @@ export function createHost({ key, name, deps, info = {} }) {
         return { status: 500, body: { error: 'clipboard failed' } };
       }
     },
+  };
+
+  // The direct route's introduction: the phone's WebRTC offer in, the
+  // computer's answer out, both sealed like any other message, so whatever
+  // carries them (the relay) learns nothing, not even local addresses.
+  handlers.rtc = async (box) => {
+    let msg;
+    try {
+      msg = unseal(box, 'rtc');
+      if (!validDescription(msg, 'offer')) throw new Error('not an offer');
+    } catch {
+      return bad;
+    }
+    if (!rtc) return { status: 404, body: { error: 'no direct route here' } };
+    try {
+      const answer = await rtc({ type: 'offer', sdp: msg.sdp });
+      return { status: 200, body: seal(key, { type: 'answer', sdp: answer.sdp }, 'rtc-ack') };
+    } catch {
+      return { status: 500, body: { error: 'direct route failed' } };
+    }
   };
 
   // -> { status, body }; never throws

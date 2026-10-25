@@ -79,7 +79,9 @@ describe('third-party notices', () => {
     const md = fs.readFileSync(path.join(root, 'THIRD_PARTY_NOTICES.md'), 'utf8');
     const used = [...md.matchAll(/^### (.+) \((\d+)\)$/gm)].map((m) => m[1]);
     expect(used.length).toBeGreaterThan(3); // the headings were found, so the check below means something
-    const fine = new Set(['MIT', 'ISC', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', '0BSD', '(MIT OR CC0-1.0)', 'CC0-1.0', 'Unlicense', 'BlueOak-1.0.0', 'Python-2.0', 'MIT-0']);
+    // MPL-2.0 is compatible with the GPL-3.0 unless its code is marked
+    // "Incompatible With Secondary Licenses" (mediabunny, through werift, is not)
+    const fine = new Set(['MIT', 'ISC', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', '0BSD', '(MIT OR CC0-1.0)', 'CC0-1.0', 'Unlicense', 'BlueOak-1.0.0', 'Python-2.0', 'MIT-0', 'MPL-2.0']);
     expect(used.filter((l) => !fine.has(l))).toEqual([]);
   });
 });

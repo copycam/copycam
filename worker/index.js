@@ -49,8 +49,12 @@ async function relay(request, env, url) {
   if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
     return new Response('expected a WebSocket', { status: 426 });
   }
-  // only CopyCam's own pages may open the relay
-  if (request.headers.get('Origin') !== url.origin) return new Response('forbidden', { status: 403 });
+  // No other website's pages may open the relay. A browser always says which
+  // site a page belongs to; the desktop companion and the mobile app aren't
+  // browsers and send no Origin at all, and no web page can make a browser
+  // leave it out.
+  const origin = request.headers.get('Origin');
+  if (origin !== null && origin !== url.origin) return new Response('forbidden', { status: 403 });
 
   const role = m[1];
   const room = role === 'pc' ? await roomFor(m[2]) : m[2];

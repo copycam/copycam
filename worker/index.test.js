@@ -70,6 +70,13 @@ describe('worker', () => {
     expect(new URL(e.ASSETS.fetch.mock.calls[0][0].url).pathname).toBe('/');
   });
 
+  it('admits the desktop companion and the mobile app, which are not browsers and send no Origin', async () => {
+    const e = env();
+    const req = new Request(`${ORIGIN}/relay/pc/${SECRET}`, { headers: { Upgrade: 'websocket' } });
+    await worker.fetch(req, e);
+    expect(e.fetched).toHaveLength(1);
+  });
+
   it('turns away other sites, plain requests and odd addresses', async () => {
     const e = env();
     expect((await worker.fetch(socketRequest(`/relay/pc/${SECRET}`, { Origin: 'https://evil.example' }), e)).status).toBe(403);

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { fromB64u } from '../../shared/crypto.js';
 import { createHost } from '../../shared/host.js';
+import { createDirectHost } from '../../shared/direct.js';
 import { loadPairing, newCode, phoneLink, computerName } from './pairing.js';
 import { useOnPhone } from '../useOnPhone.js';
 
@@ -71,15 +72,16 @@ function Logo() {
   );
 }
 
-function StatusPill({ online, phones, ready }) {
-  const [dot, text] = !online
+function StatusPill({ online, phones, ready, direct }) {
+  const linked = phones > 1 ? `${phones} phones linked` : 'Phone linked';
+  const [dot, text] = !online && !direct
     ? ['#c9c9c0', 'Connecting…']
-    : phones > 0
-      ? [ACC, phones > 1 ? `${phones} phones linked` : 'Phone linked']
+    : phones > 0 || direct > 0
+      ? [ACC, direct > 0 ? `${linked} · direct on Wi-Fi` : linked]
       : [ready ? '#9be36d' : '#e8d77a', 'Waiting for your phone'];
   return (
     <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', borderRadius: 999, padding: '7px 14px', fontSize: 13, fontWeight: 650 }}>
-      <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: dot, boxShadow: phones > 0 ? `0 0 8px ${ACC}` : 'none' }} />
+      <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: dot, boxShadow: phones > 0 || direct > 0 ? `0 0 8px ${ACC}` : 'none' }} />
       {text}
     </div>
   );
@@ -225,12 +227,13 @@ function WaitingNotice({ onCopy }) {
   );
 }
 
-// reader: from createReader(); connect: connectHost from relay-host.js. Both
+// reader: from createReader(); connect: connectHost from shared/relay-host.js. Both
 // are passed in so the page can be tested without a worker or a relay.
 export default function HostApp({ reader, connect, storage = globalThis.localStorage, nav = globalThis.navigator }) {
   const [pairing, setPairing] = useState(() => loadPairing(storage));
   const [qr, setQr] = useState(null);
   const [relay, setRelay] = useState({ online: false, phones: 0, replaced: false });
+  const [direct, setDirect] = useState(0); // phones on the direct route right now
   const [progress, setProgress] = useState({ loaded: 0, total: 0, ready: false, failed: null });
   const [items, setItems] = useState([]);
   const [showCode, setShowCode] = useState(true);
@@ -313,9 +316,19 @@ export default function HostApp({ reader, connect, storage = globalThis.localSto
     return () => window.removeEventListener('focus', onFocus);
   }, [copy]);
 
-  // What answers the phone. Rebuilt when the key changes; the relay always
-  // calls the current one.
+  // What answers the phone. Rebuilt when the key changes; the relay and the
+  // direct route always call the current one.
   const handleRef = useRef(null);
+  const directHost = useMemo(
+    () =>
+      createDirectHost({
+        loadRTC: () => RTCPeerConnection,
+        handle: (ep, box) => handleRef.current(ep, box),
+        onChange: ({ open }) => setDirect(open),
+      }),
+    [],
+  );
+  useEffect(() => () => directHost.close(), [directHost]);
   handleRef.current = useMemo(
     () =>
       createHost({
@@ -325,6 +338,8 @@ export default function HostApp({ reader, connect, storage = globalThis.localSto
         deps: {
           ocr: (bytes, script) => reader.ocr(bytes, script),
           wifi: (bytes) => reader.wifi(bytes),
+          // the direct route: answered here, served by this same host
+          rtc: typeof RTCPeerConnection === 'undefined' ? undefined : (offer) => directHost.answer(offer),
           clipboard: async (text) => {
             const item = { id: nextId.current++, text, at: Date.now(), copied: false };
             setItems((list) => [item, ...list].slice(0, MAX_ITEMS));
@@ -338,7 +353,7 @@ export default function HostApp({ reader, connect, storage = globalThis.localSto
           },
         },
       }),
-    [pairing.k, name, reader, copy, alert],
+    [pairing.k, name, reader, copy, alert, directHost],
   );
 
   useEffect(() => {
@@ -365,7 +380,7 @@ export default function HostApp({ reader, connect, storage = globalThis.localSto
       <div style={{ maxWidth: 960, margin: '0 auto', padding: '22px 20px 48px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <Logo />
-          <StatusPill online={relay.online} phones={relay.phones} ready={progress.ready} />
+          <StatusPill online={relay.online} phones={relay.phones} ready={progress.ready} direct={direct} />
         </header>
 
         {touch && (

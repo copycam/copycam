@@ -1,8 +1,10 @@
-import { toFrames, createAssembler, splitRouted, PING } from '../../shared/relay.js';
+import { toFrames, createAssembler, splitRouted, PING } from './relay.js';
 
-// The tab's line to the relay: it sits in its room as the computer, takes
-// requests from linked phones, answers them with `handle` (shared/host.js),
-// and reconnects by itself when the line drops.
+// The computer's line to the relay (a copycam.app tab, or the companion): it
+// sits in its room as the computer, takes requests from linked phones,
+// answers them with `handle` (shared/host.js), and reconnects by itself when
+// the line drops. When a request has fully arrived it first sends a receipt
+// ({ id, rc: 1 }), so the phone can time the upload on each route.
 //
 // connectHost({ secret, handle, onStatus }) -> { close() }
 //   onStatus({ online, phones, replaced })
@@ -13,7 +15,7 @@ import { toFrames, createAssembler, splitRouted, PING } from '../../shared/relay
 const KEEPALIVE_MS = 25_000;
 const BACKOFF_MS = [500, 1000, 2000, 5000, 10000];
 
-export function connectHost({ secret, handle, onStatus, url = defaultUrl(secret), WebSocketImpl = WebSocket }) {
+export function connectHost({ secret, handle, onStatus, url = defaultUrl(secret), WebSocketImpl = globalThis.WebSocket }) {
   let ws = null;
   let attempt = 0;
   let timer = null;
@@ -81,6 +83,7 @@ export function connectHost({ secret, handle, onStatus, url = defaultUrl(secret)
 
   async function answer(phone, { head, body }) {
     let result;
+    if (ws?.readyState === 1) ws.send(`${phone}\n${toFrames({ id: head.id, rc: 1 }, '')[0]}`);
     try {
       result = await handle(head.ep, JSON.parse(body));
     } catch {

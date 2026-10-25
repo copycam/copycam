@@ -19,6 +19,10 @@ import { toB64u } from './crypto.js';
 // The phone's side carries bare frames, and the relay's "*\n" news.
 
 export const PART_CHARS = 256 * 1024; // well under any WebSocket message limit
+// On the direct route (a WebRTC data channel, shared/direct.js) a message may
+// be 64 KB at most in some browsers and in the companion's WebRTC library, and
+// pieces that size or larger also move fastest (the WebRTC lab, src/lab).
+export const DIRECT_PART_CHARS = 60 * 1024;
 export const MAX_MESSAGE_CHARS = 24 * 1024 * 1024; // a sealed photo is a few MB
 export const PING = 'ping';
 export const PONG = 'pong';
@@ -33,12 +37,12 @@ export const ADDRESS = /^[A-Za-z0-9_-]{22,64}$/;
 // One message, as the frames that carry it. `head` is the routing the receiver
 // needs before it has every part: { id, ep } for a request, { id, st } for an
 // answer.
-export function toFrames(head, body) {
+export function toFrames(head, body, partChars = PART_CHARS) {
   const text = typeof body === 'string' ? body : JSON.stringify(body);
-  const n = Math.max(1, Math.ceil(text.length / PART_CHARS));
+  const n = Math.max(1, Math.ceil(text.length / partChars));
   const frames = [];
   for (let i = 0; i < n; i++) {
-    frames.push(JSON.stringify({ ...head, i, n, d: text.slice(i * PART_CHARS, (i + 1) * PART_CHARS) }));
+    frames.push(JSON.stringify({ ...head, i, n, d: text.slice(i * partChars, (i + 1) * partChars) }));
   }
   return frames;
 }
@@ -47,7 +51,7 @@ export function toFrames(head, body) {
 // complete, null while it's still arriving, and throws on a frame that can't
 // be part of anything (the caller drops it). Unfinished messages are given up
 // on after `ttlMs`, and never hold more than `maxChars` between them.
-export function createAssembler({ maxChars = MAX_MESSAGE_CHARS, ttlMs = 60_000, maxOpen = 8 } = {}) {
+export function createAssembler({ maxChars = MAX_MESSAGE_CHARS, ttlMs = 60_000, maxOpen = 8, partChars = PART_CHARS } = {}) {
   const open = new Map(); // id -> { parts, got, chars, n, head, since }
   let held = 0;
 
@@ -65,8 +69,8 @@ export function createAssembler({ maxChars = MAX_MESSAGE_CHARS, ttlMs = 60_000, 
       const f = JSON.parse(frame);
       const { id, i, n, d } = f;
       if (typeof id !== 'string' || !id || id.length > 64) throw new Error('bad id');
-      if (!Number.isInteger(n) || n < 1 || n > Math.ceil(maxChars / PART_CHARS)) throw new Error('bad count');
-      if (!Number.isInteger(i) || i < 0 || i >= n || typeof d !== 'string' || d.length > PART_CHARS) {
+      if (!Number.isInteger(n) || n < 1 || n > Math.ceil(maxChars / partChars)) throw new Error('bad count');
+      if (!Number.isInteger(i) || i < 0 || i >= n || typeof d !== 'string' || d.length > partChars) {
         throw new Error('bad part');
       }
       const { i: _i, n: _n, d: _d, ...head } = f;

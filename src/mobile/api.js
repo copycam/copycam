@@ -99,3 +99,9 @@ export function isConnectionError(e) {
 export function isPairingRejected(e) {
   return e instanceof CallError && e.kind === 'rejected' && (e.status === 400 || e.status === 403);
 }
+
+// The route label: talking to the companion over the Wi-Fi is always direct.
+export function onRoute(fn) {
+  fn('direct');
+  return () => {};
+}

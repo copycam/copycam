@@ -33,7 +33,7 @@ describe('MobileApp', () => {
     api.call.mockResolvedValueOnce({ name: 'MY-PC' });
     render(<MobileApp />);
 
-    expect(await screen.findByText('MY-PC — linked')).toBeInTheDocument();
+    expect(await screen.findByText('Linked · direct on Wi-Fi')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /take photo of text/i })).toBeInTheDocument();
     expect(api.call).toHaveBeenCalledWith(KEY, 'hello', {});
   });
@@ -46,7 +46,7 @@ describe('MobileApp', () => {
     navigator.mediaDevices = { getUserMedia: vi.fn().mockResolvedValue(fakeStream) };
 
     const { unmount } = render(<MobileApp />);
-    await screen.findByText('MY-PC — linked');
+    await screen.findByText('Linked · direct on Wi-Fi');
     expect(await screen.findByText(/frame the text, then tap the shutter/i)).toBeInTheDocument();
     expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledWith(
       expect.objectContaining({ video: expect.objectContaining({ facingMode: 'environment' }) }),
@@ -67,7 +67,7 @@ describe('MobileApp', () => {
     };
 
     render(<MobileApp />);
-    await screen.findByText('MY-PC — linked');
+    await screen.findByText('Linked · direct on Wi-Fi');
 
     const flash = await screen.findByRole('button', { name: /turn flash on/i });
     fireEvent.click(flash);
@@ -86,7 +86,7 @@ describe('MobileApp', () => {
     };
 
     render(<MobileApp />);
-    await screen.findByText('MY-PC — linked');
+    await screen.findByText('Linked · direct on Wi-Fi');
 
     expect(screen.queryByRole('button', { name: /turn flash on/i })).not.toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /open the camera app, which has flash/i })).toBeInTheDocument();
@@ -101,7 +101,7 @@ describe('MobileApp', () => {
       return { name: 'MY-PC' };
     });
     render(<MobileApp />);
-    await screen.findByText('MY-PC — linked');
+    await screen.findByText('Linked · direct on Wi-Fi');
 
     fireEvent.click(screen.getByRole('button', { name: /change text language/i }));
     fireEvent.click(await screen.findByText('Cyrillic'));
@@ -139,7 +139,7 @@ describe('MobileApp', () => {
     api.loadKey.mockReturnValue(KEY);
     api.call.mockResolvedValueOnce({ name: 'MY-PC' });
     render(<MobileApp />);
-    await screen.findByText('MY-PC — linked');
+    await screen.findByText('Linked · direct on Wi-Fi');
 
     const shutter = screen.getByRole('button', { name: /take photo of text/i });
     expect(shutter.style.top).toBe('50%'); // vertically centred on the side
@@ -157,7 +157,7 @@ describe('MobileApp', () => {
     api.loadKey.mockReturnValue(KEY);
     api.call.mockResolvedValueOnce({ name: 'MY-PC' });
     render(<MobileApp />);
-    await screen.findByText('MY-PC — linked');
+    await screen.findByText('Linked · direct on Wi-Fi');
 
     const shutter = screen.getByRole('button', { name: /take photo of text/i });
     expect(shutter.style.left).toBe('50%');
@@ -172,7 +172,7 @@ describe('MobileApp', () => {
     api.loadKey.mockReturnValue(KEY);
     api.call.mockResolvedValueOnce({ name: 'MY-PC' });
     render(<MobileApp />);
-    await screen.findByText('MY-PC — linked');
+    await screen.findByText('Linked · direct on Wi-Fi');
 
     fireEvent.click(screen.getByRole('button', { name: /change text language/i }));
     expect(await screen.findByText('Text language')).toBeInTheDocument();
@@ -189,7 +189,7 @@ describe('MobileApp', () => {
     api.loadKey.mockReturnValue(KEY);
     api.call.mockResolvedValueOnce({ name: 'MY-PC' });
     render(<MobileApp />);
-    await screen.findByText('MY-PC — linked');
+    await screen.findByText('Linked · direct on Wi-Fi');
 
     fireEvent.click(screen.getByRole('button', { name: /change text language/i }));
     const handle = await screen.findByLabelText('Drag down to close');
@@ -205,7 +205,7 @@ describe('MobileApp', () => {
     api.call.mockResolvedValueOnce({ name: 'MY-PC' });
     // no navigator.mediaDevices in jsdom -> startCamera throws -> fallback
     render(<MobileApp />);
-    await screen.findByText('MY-PC — linked');
+    await screen.findByText('Linked · direct on Wi-Fi');
     expect(await screen.findByText(/tap the shutter, then photograph the text/i)).toBeInTheDocument();
 
     const input = document.querySelector('input[type=file]');
@@ -236,7 +236,7 @@ describe('MobileApp', () => {
 
     await screen.findByText(/can’t reach your computer/i);
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
-    expect(await screen.findByText('MY-PC — linked')).toBeInTheDocument();
+    expect(await screen.findByText('Linked · direct on Wi-Fi')).toBeInTheDocument();
   });
 
   it('scans, shows the overlay review, and sends the selected text', async () => {
@@ -256,7 +256,7 @@ describe('MobileApp', () => {
       return { name: 'MY-PC' };
     });
     render(<MobileApp />);
-    await screen.findByText('MY-PC — linked');
+    await screen.findByText('Linked · direct on Wi-Fi');
 
     const input = document.querySelector('input[type=file]');
     const file = new File(['xx'], 'p.jpg', { type: 'image/jpeg' });
@@ -294,7 +294,7 @@ describe('MobileApp', () => {
       return { name: 'MY-PC' };
     });
     render(<MobileApp />);
-    await screen.findByText('MY-PC — linked');
+    await screen.findByText('Linked · direct on Wi-Fi');
 
     globalThis.URL.createObjectURL = vi.fn(() => 'blob:x');
     globalThis.URL.revokeObjectURL = vi.fn();
@@ -376,7 +376,7 @@ describe('MobileApp', () => {
       return { name: 'MY-PC' };
     });
     render(<MobileApp />);
-    await screen.findByText('MY-PC — linked');
+    await screen.findByText('Linked · direct on Wi-Fi');
 
     globalThis.URL.createObjectURL = vi.fn(() => 'blob:x');
     globalThis.URL.revokeObjectURL = vi.fn();
@@ -415,7 +415,7 @@ describe('MobileApp', () => {
       return { name: 'MY-PC' };
     });
     render(<MobileApp />);
-    await screen.findByText('MY-PC — linked');
+    await screen.findByText('Linked · direct on Wi-Fi');
 
     globalThis.URL.createObjectURL = vi.fn(() => 'blob:x');
     globalThis.URL.revokeObjectURL = vi.fn();
@@ -460,11 +460,11 @@ describe('MobileApp linked to a copycam.app tab', () => {
     expect(screen.queryByText(/wi-fi you trust/i)).toBeNull();
   });
 
-  it('names the computer, and offers only the scripts its reader has', async () => {
+  it('says it is linked through copycam.app, and offers only the scripts its reader has', async () => {
     web.loadKey.mockReturnValue({ key: KEY, room: 'r'.repeat(22) });
     web.call.mockResolvedValueOnce({ name: 'your Mac', scripts: ['auto'] });
     render(<MobileApp transport={web} mode="web" />);
-    expect(await screen.findByText('Your Mac — linked')).toBeInTheDocument();
+    expect(await screen.findByText('Linked · through copycam.app')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /change text language/i })).toBeNull();
   });
 

@@ -7,8 +7,11 @@ import https from 'node:https';
 import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
 import clipboard from 'clipboardy';
-import { newKey, toB64u, fromB64u } from '../shared/crypto.js';
-import { createApp, buildAllowedHosts } from './app.js';
+import { newKey, randomBytes, toB64u, fromB64u } from '../shared/crypto.js';
+import { roomFor } from '../shared/relay.js';
+import { connectHost } from '../shared/relay-host.js';
+import { createDirectHost } from '../shared/direct.js';
+import { createApp, createCompanionHost, buildAllowedHosts } from './app.js';
 import { recognize, warmup } from './ocr.js';
 import { decodeWifi } from './wifi.js';
 import { loadTlsMaterial } from './tls.js';
@@ -23,20 +26,41 @@ const CERT_FILE = path.join(os.homedir(), '.copycam', 'tls.json');
 const PORT = Number(process.env.PORT) || 8787;
 const DESKTOP_PORT = PORT + 1;
 
+// copycam.app, whose relay links a phone to this computer from any network.
+// CC_SITE points at another copy of it (a local `wrangler dev`, for testing).
+const SITE = (process.env.CC_SITE || 'https://copycam.app').replace(/\/$/, '');
+// how long to wait at start for copycam.app before showing the Wi-Fi link instead
+const RELAY_WAIT_MS = 5000;
+// werift falls back to Google's STUN server when it's given none. Pointed at a
+// closed port on this computer instead, it contacts nobody and offers only
+// local addresses, which is all the direct route uses (seconds).
+const WERIFT_CONFIG = { iceServers: [{ urls: 'stun:127.0.0.1:9' }], iceStunGatherTimeout: 0.05 };
+
+// The pairing: the session key every message is sealed with, and the secret
+// that makes this computer the one in its copycam.app relay room. --reset
+// makes a new key; the room stays, so phones holding the old key reach this
+// computer, are refused, and are told to rescan.
 function loadOrCreateKey({ reset }) {
-  if (!reset && fs.existsSync(KEY_FILE)) {
-    try {
-      const stored = JSON.parse(fs.readFileSync(KEY_FILE, 'utf8'));
-      const key = fromB64u(stored.key);
-      if (key.length === 32) return { key, isNew: false };
-    } catch {
-      // corrupt key file — fall through and regenerate
-    }
+  let stored = null;
+  try {
+    stored = fs.existsSync(KEY_FILE) ? JSON.parse(fs.readFileSync(KEY_FILE, 'utf8')) : null;
+  } catch {
+    // corrupt key file — fall through and regenerate
   }
-  const key = newKey();
-  fs.mkdirSync(path.dirname(KEY_FILE), { recursive: true });
-  fs.writeFileSync(KEY_FILE, JSON.stringify({ key: toB64u(key) }), { mode: 0o600 });
-  return { key, isNew: true };
+  let key = null;
+  try {
+    key = !reset && stored?.key ? fromB64u(stored.key) : null;
+  } catch {
+    key = null;
+  }
+  const isNew = key?.length !== 32;
+  if (isNew) key = newKey();
+  const secret = typeof stored?.secret === 'string' && stored.secret.length === 43 ? stored.secret : toB64u(randomBytes(32));
+  if (isNew || secret !== stored?.secret) {
+    fs.mkdirSync(path.dirname(KEY_FILE), { recursive: true });
+    fs.writeFileSync(KEY_FILE, JSON.stringify({ key: toB64u(key), secret }), { mode: 0o600 });
+  }
+  return { key, secret, isNew };
 }
 
 // Adapters a phone on the Wi-Fi can never reach. WSL and Hyper-V hand out
@@ -62,7 +86,10 @@ function lanIPs() {
   return process.env.CC_IP ? [process.env.CC_IP, ...ips.filter((ip) => ip !== process.env.CC_IP)] : ips;
 }
 
-function desktopHtml({ qrSvg, hostname }) {
+// via: 'relay' when the QR is the copycam.app link (any network), 'lan' when
+// it's this computer's own address (same Wi-Fi, certificate warning)
+function desktopHtml({ qrSvg, hostname, via }) {
+  const relay = via === 'relay';
   return `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -97,7 +124,7 @@ function desktopHtml({ qrSvg, hostname }) {
 <div class="card">
   <div class="logo">Copy<b>Cam</b></div>
   <div class="qr">${qrSvg}</div>
-  <div class="hint">Same Wi&#8209;Fi. Open it in your phone&rsquo;s browser.</div>
+  <div class="hint">${relay ? 'Any network: your phone doesn&rsquo;t need to be on this Wi&#8209;Fi.' : 'Same Wi&#8209;Fi. Open it in your phone&rsquo;s browser.'}</div>
 
   <div class="ways">
     <div class="way">
@@ -106,7 +133,7 @@ function desktopHtml({ qrSvg, hostname }) {
         <li>Point your phone&rsquo;s camera at the code above.</li>
         <li>Tap the link it offers.</li>
       </ol>
-      <div class="note">First time only, your phone warns &ldquo;not private&rdquo; &mdash; that is CopyCam&rsquo;s own certificate. Tap Show&nbsp;Details (or Advanced) &rarr; Visit&nbsp;Website.</div>
+      <div class="note">${relay ? 'It opens copycam.app on your phone, linked to this computer. On the same Wi&#8209;Fi they talk directly; anywhere else, through copycam.app. Either way, sealed end to end.' : 'First time only, your phone warns &ldquo;not private&rdquo; &mdash; that is CopyCam&rsquo;s own certificate. Tap Show&nbsp;Details (or Advanced) &rarr; Visit&nbsp;Website.'}</div>
     </div>
     <div class="way">
       <h2><span class="tag">APP</span> coming soon</h2>
@@ -118,7 +145,7 @@ function desktopHtml({ qrSvg, hostname }) {
   <div class="log" id="log"></div>
   <div class="safe">
     <svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect x="0.75" y="5" width="8.5" height="6.25" rx="1.5" fill="none" stroke="#9a9a92" stroke-width="1.5"/><path d="M2.5 5V3.5a2.5 2.5 0 015 0V5" fill="none" stroke="#9a9a92" stroke-width="1.5"/></svg>
-    everything is end-to-end encrypted &middot; use Wi&#8209;Fi you trust
+    everything is end-to-end encrypted${relay ? '' : ' &middot; use Wi&#8209;Fi you trust'}
   </div>
 </div>
 <script>
@@ -135,9 +162,33 @@ function desktopHtml({ qrSvg, hostname }) {
 </script>`;
 }
 
+// Joins this computer's copycam.app relay room, and resolves to whether it
+// got in within RELAY_WAIT_MS. It keeps trying in the background either way.
+async function joinRelay({ secret, host, log }) {
+  const WebSocketImpl = globalThis.WebSocket ?? (await import('ws')).default;
+  let first;
+  const firstStatus = new Promise((resolve) => (first = resolve));
+  let phones = 0;
+  connectHost({
+    secret,
+    handle: host,
+    url: `${SITE.replace(/^http/, 'ws')}/relay/pc/${secret}`,
+    WebSocketImpl,
+    onStatus: (s) => {
+      first(s.online);
+      if (s.replaced) log('Another CopyCam on this computer took over the pairing; this one is no longer reachable through copycam.app.');
+      if (s.phones !== phones && s.online) log(s.phones > phones ? '✓ Phone connected through copycam.app' : 'Phone left');
+      phones = s.phones;
+    },
+  });
+  return Promise.race([firstStatus, new Promise((resolve) => setTimeout(() => resolve(false), RELAY_WAIT_MS))]);
+}
+
 async function main() {
   const reset = process.argv.includes('--reset');
-  const { key, isNew } = loadOrCreateKey({ reset });
+  // "Only connect on my own Wi-Fi": never contact copycam.app, as before 0.2.0
+  const localOnly = process.argv.includes('--local-only') || process.env.CC_LOCAL_ONLY === '1';
+  const { key, secret, isNew } = loadOrCreateKey({ reset });
   const hostname = os.hostname();
   const ips = lanIPs();
 
@@ -161,20 +212,21 @@ async function main() {
   // instead. That costs nothing in confidentiality: every payload is already
   // sealed with AES-256-GCM, and unlike the browser build there is no served
   // page for a network attacker to tamper with. The browser build ignores `h`.
-  const pairUrl = `https://${pairHost}:${PORT}/?h=${DESKTOP_PORT}#k=${toB64u(key)}`;
+  const lanUrl = `https://${pairHost}:${PORT}/?h=${DESKTOP_PORT}#k=${toB64u(key)}`;
   const allowedHosts = buildAllowedHosts({ ips, domain, port: PORT, desktopPort: DESKTOP_PORT });
 
-  const app = createApp({
-    key,
-    hostname,
-    distDir: DIST,
-    allowedHosts,
-    deps: {
-      clipboard: (text) => clipboard.write(text),
-      ocr: recognize,
-      wifi: decodeWifi,
-      onEvent: (ev) => {
-        app.get('broadcast')(ev);
+  // One handler for every route the phone may come by (see createCompanionHost).
+  let directHost = null;
+  let app = null;
+  const deps = {
+    clipboard: (text) => clipboard.write(text),
+    ocr: recognize,
+    wifi: decodeWifi,
+    // the direct route's introduction; never offered with --local-only, where
+    // phones come over the Wi-Fi to /api and nothing goes through copycam.app
+    rtc: localOnly ? undefined : (offer) => directHost.answer(offer),
+    onEvent: (ev) => {
+      app?.get('broadcast')(ev);
         if (ev.type === 'paired') console.log('✓ Phone linked');
         if (ev.type === 'scanned') {
           // the network name and password themselves are never logged
@@ -182,13 +234,32 @@ async function main() {
             `  scanned photo — ${ev.blocks} text blocks${ev.wifi ? ' + a Wi-Fi code' : ''}, read in ${(ev.ms / 1000).toFixed(1)} s`,
           );
         }
-        if (ev.type === 'copied') console.log(`✓ Copied ${ev.chars} chars to clipboard`);
-      },
+      if (ev.type === 'copied') console.log(`✓ Copied ${ev.chars} chars to clipboard`);
     },
-  });
+  };
+  const host = createCompanionHost({ key, hostname, deps });
+  app = createApp({ key, hostname, distDir: DIST, allowedHosts, deps, host });
+
+  // Through copycam.app (any network), and direct on the Wi-Fi once the phone
+  // has been introduced; the WebRTC library loads on the first introduction.
+  let viaRelay = false;
+  if (!localOnly) {
+    let directCount = 0;
+    directHost = createDirectHost({
+      loadRTC: async () => (await import('werift')).RTCPeerConnection,
+      rtcConfig: WERIFT_CONFIG,
+      handle: host,
+      onChange: ({ open }) => {
+        if (open > directCount) console.log('✓ Phone connected directly on the Wi-Fi');
+        directCount = open;
+      },
+    });
+    viaRelay = await joinRelay({ secret, host, log: (line) => console.log(line) });
+  }
+  const pairUrl = viaRelay ? `${SITE}/p/#r=${await roomFor(secret)}&k=${toB64u(key)}` : lanUrl;
 
   const qrSvg = await QRCode.toString(pairUrl, { type: 'svg', margin: 1 });
-  app.set('desktopHtml', desktopHtml({ qrSvg, hostname }));
+  app.set('desktopHtml', desktopHtml({ qrSvg, hostname, via: viaRelay ? 'relay' : 'lan' }));
 
   const tls = await loadTlsMaterial(CERT_FILE, ips);
   const phoneServer = https.createServer({ key: tls.key, cert: tls.cert }, app);
@@ -203,13 +274,21 @@ async function main() {
       console.log(`CopyCam companion on ${hostname}\n`);
       QRCode.toString(pairUrl, { type: 'terminal', small: true }, (err, qr) => {
         if (!err) console.log(qr);
-        console.log(`Scan the QR with your phone (same Wi-Fi), or open it at:`);
-        console.log(`  http://localhost:${DESKTOP_PORT}/desktop\n`);
+        if (viaRelay) {
+          console.log('Scan the QR with your phone (any network), or open it at:');
+          console.log(`  http://localhost:${DESKTOP_PORT}/desktop\n`);
+          console.log('On the same Wi-Fi the phone connects directly; anywhere else, through copycam.app.');
+          console.log('Everything is sealed end to end either way. To keep it all on this network: --local-only');
+        } else {
+          if (!localOnly) console.log(`Couldn't reach ${SITE}, so this is the direct link for this Wi-Fi.\n`);
+          console.log('Scan the QR with your phone (same Wi-Fi), or open it at:');
+          console.log(`  http://localhost:${DESKTOP_PORT}/desktop\n`);
+        }
         console.log(`Browser app: https://${pairHost}:${PORT}   CopyCam app: http://${ip}:${DESKTOP_PORT}`);
         if (ips.length > 1) console.log(`(multiple networks detected, using ${ip} — others: ${ips.slice(1).join(', ')})`);
         console.log(isNew ? 'New pairing key generated.' : 'Using existing pairing key (run with --reset to rotate).');
         console.log(`TLS certificate: ${tls.source}`);
-        if (tls.source === 'self-signed') {
+        if (!viaRelay && tls.source === 'self-signed') {
           console.log('First connect: your phone shows a one-time certificate warning');
           console.log('("not private") — tap Show Details / Advanced, then Visit Website.');
         }

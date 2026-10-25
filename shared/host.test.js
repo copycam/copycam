@@ -47,4 +47,32 @@ describe('createHost', () => {
     expect((await handle('toString', box)).status).toBe(404);
     expect((await handle('clip', null)).status).toBe(400);
   });
+
+  it('introduces the direct route with a sealed offer and a sealed answer', async () => {
+    const rtc = vi.fn(async (offer) => ({ type: 'answer', sdp: `answer to ${offer.sdp}` }));
+    const handle = make({ rtc });
+    const res = await handle('rtc', seal(key, { type: 'offer', sdp: 'v=0 offer' }, 'rtc'));
+    expect(res.status).toBe(200);
+    expect(rtc).toHaveBeenCalledWith({ type: 'offer', sdp: 'v=0 offer' });
+    // the answer can only be read with the key: whatever carried it saw a box
+    expect(JSON.stringify(res.body)).not.toContain('answer to');
+    expect(open(key, res.body, 'rtc-ack')).toMatchObject({ type: 'answer', sdp: 'answer to v=0 offer' });
+  });
+
+  it('checks an introduction like any other message', async () => {
+    const rtc = vi.fn(async () => ({ type: 'answer', sdp: 'v=0' }));
+    const handle = make({ rtc });
+    const box = seal(key, { type: 'offer', sdp: 'v=0' }, 'rtc');
+    expect((await handle('rtc', box)).status).toBe(200);
+    expect((await handle('rtc', box)).status).toBe(400); // replayed
+    expect((await handle('rtc', seal(newKey(), { type: 'offer', sdp: 'v=0' }, 'rtc'))).status).toBe(400); // wrong key
+    expect((await handle('rtc', seal(key, { type: 'answer', sdp: 'v=0' }, 'rtc'))).status).toBe(400); // not an offer
+    expect((await handle('rtc', seal(key, { type: 'offer', sdp: 'v=0' }, 'hello'))).status).toBe(400); // sealed for another endpoint
+    expect(rtc).toHaveBeenCalledTimes(1);
+  });
+
+  it('says there is no direct route when the computer has none', async () => {
+    const handle = make();
+    expect((await handle('rtc', seal(key, { type: 'offer', sdp: 'v=0' }, 'rtc'))).status).toBe(404);
+  });
 });

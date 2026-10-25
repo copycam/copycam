@@ -13,7 +13,8 @@ const root = path.resolve(import.meta.dirname, '..');
 // Code from these is bundled into built web pages: dist/assets (the phone app
 // and the landing page) and dist-site/assets (copycam.app, whose /app/ page
 // reads text in the browser and draws the pairing QR code). react-dom carries
-// scheduler with it, and qrcode carries dijkstrajs. Some are dev dependencies,
+// scheduler with it, and qrcode carries dijkstrajs; jsqr reads the pairing
+// code inside a Home Screen app. Some are dev dependencies,
 // because users never install them: they only get what the bundle contains.
 const BUNDLED = [
   'react',
@@ -26,6 +27,7 @@ const BUNDLED = [
   'zxing-wasm',
   'qrcode',
   'dijkstrajs',
+  'jsqr',
 ];
 
 const licenceOf = (entry, dir) => {

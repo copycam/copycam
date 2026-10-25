@@ -32,9 +32,13 @@ export function buildAllowedHosts({ ips, domain, port, desktopPort }) {
   return new Set(hosts);
 }
 
-export function createApp({ key, hostname, distDir, allowedHosts, deps }) {
+// The companion's answer to the phone (shared/host.js), whichever way the
+// phone comes: over the Wi-Fi to /api, through copycam.app's relay, or on a
+// direct WebRTC channel. One instance serves them all, so a nonce accepted on
+// one route is spent on every route.
+export function createCompanionHost({ key, hostname, deps }) {
   const { ocr, wifi } = deps;
-  const host = createHost({
+  return createHost({
     key,
     name: hostname,
     deps: {
@@ -44,6 +48,11 @@ export function createApp({ key, hostname, distDir, allowedHosts, deps }) {
       wifi: wifi && ((bytes) => wifi(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength))),
     },
   });
+}
+
+// `host`: the handler from createCompanionHost, when the companion also
+// serves the phone by other routes; otherwise one is made from `deps`.
+export function createApp({ key, hostname, distDir, allowedHosts, deps, host = createCompanionHost({ key, hostname, deps }) }) {
   const hits = new Map(); // per-IP rolling request timestamps for /api
 
   const app = express();

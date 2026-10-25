@@ -4,6 +4,8 @@ import { isConnectionError, isPairingRejected } from './api.js';
 import { downscalePhoto, blobToBytes, frameToJpeg, computeFrame, rotateBlob, CHROME } from './image.js';
 import { toB64u } from '../../shared/crypto.js';
 import ImageReview from './ImageReview.jsx';
+import { HomeScreenTip, ScanToPair } from './HomeScreen.jsx';
+import { shouldShowHomeTip } from './home.js';
 import { SCRIPTS, scriptLabel } from './scripts.js';
 
 const ACC = '#CFFF3B';
@@ -42,9 +44,6 @@ const connectionProblem = (e, words) => ({
   message: isPairingRejected(e) ? COPY.pairingRejected : words.unreachable,
 });
 
-// A computer's name reads well mid-sentence ("Can’t reach your Mac") but
-// starts the linked pill, where it wants a capital.
-const capitalised = (name) => name.charAt(0).toUpperCase() + name.slice(1);
 
 const ctaPrimary = {
   border: 'none',
@@ -168,6 +167,12 @@ export default function MobileApp({ transport = lan, mode = 'lan' }) {
   const [readable, setReadable] = useState(null);
   // the computer has the text but is waiting for a click to copy it
   const [pending, setPending] = useState(false);
+  // how the phone reaches the computer: 'direct' (on the Wi-Fi) or 'relay'
+  // (through copycam.app); the companion's own page is always direct
+  const [route, setRoute] = useState(mode === 'web' ? 'relay' : 'direct');
+  const [homeTip, setHomeTip] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  useEffect(() => transport.onRoute?.(setRoute), [transport]);
   // captured photo {url,width,height} + word geometry for the overlay review
   const [photo, setPhoto] = useState(null);
   const [geo, setGeo] = useState(null);
@@ -297,6 +302,12 @@ export default function MobileApp({ transport = lan, mode = 'lan' }) {
     else setPickerY(0);
   };
 
+  // A code scanned from inside the page pairs it just as the camera's link does.
+  const onScanned = useCallback((hash) => {
+    history.replaceState(null, '', `${window.location.pathname}${hash}`);
+    window.location.reload();
+  }, []);
+
   const connect = useCallback(() => {
     setPhase('connecting');
     call(keyRef.current, 'hello', {})
@@ -304,6 +315,8 @@ export default function MobileApp({ transport = lan, mode = 'lan' }) {
         setPcName(ack.name);
         setReadable(Array.isArray(ack.scripts) ? ack.scripts : null);
         setPhase('idle');
+        // once, after the first link: how to keep it on the Home Screen
+        if (mode === 'web' && shouldShowHomeTip()) setHomeTip(true);
       })
       .catch((e) => {
         setProblem(connectionProblem(e, words));
@@ -517,6 +530,13 @@ export default function MobileApp({ transport = lan, mode = 'lan' }) {
             {words.unpaired}
           </div>
         )}
+        {/* a Home Screen app can't be opened by the camera's link, so it scans the code itself */}
+        {phase === 'unpaired' && mode === 'web' && (
+          <button onClick={() => setScanning(true)} style={ctaSecondary}>
+            Scan the code with this page
+          </button>
+        )}
+        {scanning && <ScanToPair onPaired={onScanned} onCancel={() => setScanning(false)} />}
         {phase === 'error' && problem && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 10, width: '100%', maxWidth: 320 }}>
             <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.4 }}>
@@ -604,7 +624,7 @@ export default function MobileApp({ transport = lan, mode = 'lan' }) {
       >
         <div style={{ ...ctlPill, gap: 8, cursor: 'default', flex: '0 1 auto', minWidth: 0, maxWidth: FRAME.landscape ? 260 : '100%' }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: ACC, flex: 'none', boxShadow: `0 0 8px ${ACC}` }} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{capitalised(pcName)} — linked</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Linked · {route === 'direct' ? 'direct on Wi-Fi' : 'through copycam.app'}</span>
         </div>
 
         {/* capture controls: flash (where the browser allows it) + script */}
@@ -789,6 +809,8 @@ export default function MobileApp({ transport = lan, mode = 'lan' }) {
           onRetake={rescan}
         />
       )}
+
+      {homeTip && phase === 'idle' && <HomeScreenTip onDone={() => setHomeTip(false)} />}
 
       {phase === 'sent' && (
         <div style={{ position: 'absolute', top: 'max(90px, calc(env(safe-area-inset-top) + 60px))', left: '50%', transform: 'translateX(-50%)', animation: 'ccToast .35s cubic-bezier(.2,.9,.3,1.2) forwards', display: 'flex', alignItems: 'center', gap: 10, background: '#FAFAF7', borderRadius: 999, padding: '10px 18px 10px 12px', boxShadow: '0 10px 30px rgba(0,0,0,.4)', whiteSpace: 'nowrap' }}>
